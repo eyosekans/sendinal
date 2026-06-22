@@ -1,0 +1,17 @@
+{
+  // Standalone worker process — runs via Node's native TypeScript support.
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  // Only the worker dir; shared schemas are type-checked transitively via the
+  // concrete `.ts` imports the worker makes (and by `nuxt typecheck`).
+  "include": ["**/*.ts"]
+}
