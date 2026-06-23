@@ -10,4 +10,6 @@
  * files directly (e.g. `shared/schemas/jobs.ts`) rather than this barrel.
  */
 export * from './contact'
+export * from './list'
+export * from './campaign'
 export * from './jobs'

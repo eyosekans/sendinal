@@ -1,2 +1,96 @@
 @import 'tailwindcss';
 @import '@nuxt/ui';
+
+/* ============================================================
+   Design system tokens (from docs/.../DESIGN_SYSTEM.md).
+   Single source of truth for the warm-gray + slate-teal palette.
+   Dark mode (Phase 4) re-maps these under html.dark.
+   ============================================================ */
+:root {
+  /* Primary — Slate Teal */
+  --primary-50: #edf7f5;
+  --primary-100: #c8ebe4;
+  --primary-200: #94d5c8;
+  --primary-400: #2fa898;
+  --primary-600: #1a7a6e;
+  --primary-800: #0f5247;
+  --primary-900: #092f29;
+
+  /* Neutral — Warm Gray */
+  --gray-50: #f8f7f5;
+  --gray-100: #f0eeeb;
+  --gray-200: #e2ded9;
+  --gray-300: #c9c4bd;
+  --gray-400: #a09990;
+  --gray-500: #787068;
+  --gray-600: #534d46;
+  --gray-700: #3d3830;
+  --gray-800: #28241e;
+  --gray-900: #18150f;
+
+  /* Semantic */
+  --success-100: #dcf3e8;
+  --success-600: #1a7a46;
+  --warning-100: #fef3d0;
+  --warning-600: #92620a;
+  --danger-100: #fde8e8;
+  --danger-600: #c0272d;
+  --info-100: #e3f0fd;
+  --info-600: #1a5fa8;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.07), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-elevated:
+    0 8px 24px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06);
+
+  /* Type */
+  --font-display: 'DM Sans', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* Base — applies to the authenticated app shell. */
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--gray-50);
+  color: var(--gray-600);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Shared keyframes for modals/overlays (prefixed to avoid collisions). */
+@keyframes dc-overlayin {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes dc-modalin {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

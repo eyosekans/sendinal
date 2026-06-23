@@ -33,58 +33,250 @@ Goal: a working platform that can send a plain-HTML email to a contact list and 
 >   all pass clean.
 
 ### 1.2 Supabase setup
-- [ ] Create Supabase project and note URL + keys
-- [ ] Write migration: `contacts` table
-- [ ] Write migration: `lists` table
-- [ ] Write migration: `list_contacts` junction table
-- [ ] Write migration: `campaigns` table
-- [ ] Write migration: `templates` table
-- [ ] Write migration: `sends` table
-- [ ] Write migration: `email_events` table
-- [ ] Write migration: `tracking_tokens` table
-- [ ] Enable RLS on all tables; add `auth.uid() IS NOT NULL` policies
-- [ ] Create `template-assets` Storage bucket (public read)
+- [x] Create Supabase project and note URL + keys
+- [x] Write migration: `contacts` table
+- [x] Write migration: `lists` table
+- [x] Write migration: `list_contacts` junction table
+- [x] Write migration: `campaigns` table
+- [x] Write migration: `templates` table
+- [x] Write migration: `sends` table
+- [x] Write migration: `email_events` table
+- [x] Write migration: `tracking_tokens` table
+- [x] Enable RLS on all tables; add `auth.uid() IS NOT NULL` policies
+- [x] Create `template-assets` Storage bucket (public read)
+
+> **1.2 notes (in progress)**
+> - All migrations written under `supabase/migrations/` (10 files, timestamp-ordered).
+>   FK order respected: contacts → lists → list_contacts → campaigns → templates →
+>   sends → email_events → tracking_tokens, then RLS, then storage bucket.
+> - Added CHECK constraints on all status/type enum columns (mirrors the Zod
+>   enums in `shared/schemas`) and helpful indexes (`sends.campaign_id`,
+>   `sends.ses_message_id`, `email_events.send_id`, `list_contacts.contact_id`,
+>   partial index on scheduled campaigns) — pulls some of 4.3 forward.
+> - RLS: one permissive `FOR ALL TO authenticated` policy per table (internal
+>   tool, no per-user isolation). Service-role key bypasses RLS, so tracking
+>   routes + SES webhook are unaffected.
+> - `updated_at` auto-update trigger intentionally deferred to task 4.3.
+> - APPLIED to project `sfcqhyoqxtfggtojmptt` (all 10 migrations OK). Verified:
+>   8 public tables all with RLS, 8 public policies, `template-assets` bucket
+>   (public=true) + 4 storage policies.
+> - Generated `app/types/database.types.ts` by hand from the schema (no Supabase
+>   CLI installed). `@nuxtjs/supabase` auto-loads it from the default
+>   `~/types/database.types.ts` path — no nuxt.config change needed. Regenerate
+>   later with `supabase gen types typescript --linked` once the CLI is wired up.
+> - `npm run typecheck` and `npm run lint` pass clean.
+> - NOTE: `.env` still needs the real `NUXT_PUBLIC_SUPABASE_URL` /
+>   `NUXT_PUBLIC_SUPABASE_KEY` / `NUXT_SUPABASE_SECRET_KEY` values (from the
+>   Supabase dashboard → Project Settings → API) before auth/data work in 1.3+.
 
 ### 1.3 Authentication
-- [ ] `/login` page — Supabase email + password form
-- [ ] Auth middleware protecting all routes except `/login`, `/t/*`, `/api/webhooks/*`
-- [ ] `/confirm` callback page for Supabase auth redirect
-- [ ] Logout button in app layout
+- [x] `/login` page — Supabase email + password form
+- [x] Auth middleware protecting all routes except `/login`, `/t/*`, `/api/webhooks/*`
+- [x] `/confirm` callback page for Supabase auth redirect
+- [x] Logout button in app layout
+
+> **1.3 notes**
+> - Page protection is handled by `@nuxtjs/supabase`'s built-in redirect
+>   middleware (`redirect: true` in nuxt.config), which already excludes
+>   `/t/*` + `/api/webhooks/*` and auto-excludes `/login` + `/confirm`. No
+>   custom global page middleware written (would be redundant/conflicting).
+>   Verified: GET `/` → 302 `/login`; `/login`, `/confirm`, `/api/health` → 200.
+> - Form validation uses Nuxt UI's `UForm` + Zod (native support). VeeValidate
+>   (listed in PROJECT_CONTEXT) is NOT installed — Nuxt UI covers it, so skipped
+>   to avoid a redundant dependency. Revisit if complex field-level forms appear.
+> - `/login` + `/confirm` use `definePageMeta({ layout: false })`; authenticated
+>   pages use the new `app/layouts/default.vue` (top nav + email + Sign out).
+> - Added `server/utils/auth.ts → requireUser(event)` (server-side 401 guard) for
+>   protected API routes built in 1.5+. Public routes must not call it.
+> - HEADS-UP (env, not blocking): module warns `SUPABASE_SERVICE_KEY` →
+>   `NUXT_SUPABASE_SECRET_KEY` rename. Update `.env` (+ `.env.example`) before
+>   relying on the service-role client for tracking routes / SES webhook (1.8).
 
 ### 1.4 Amazon SES setup
-- [ ] Install and configure `@aws-sdk/client-ses` in the worker
-- [ ] Verify sender domain in SES console (DKIM + SPF records)
-- [ ] Request SES production access (exit sandbox)
-- [ ] Create SNS topic for bounce/complaint notifications
-- [ ] Create SQS queue; subscribe it to the SNS topic
-- [ ] Configure SES to publish bounce + complaint events to the SNS topic
-- [ ] Write `worker/lib/ses.js` — wrapper around `SendEmail` with error handling
+- [x] Install and configure `@aws-sdk/client-ses` in the worker
+- [ ] Verify sender domain in SES console (DKIM + SPF records)  _(manual — DNS)_
+- [ ] Request SES production access (exit sandbox)  _(manual — AWS approval)_
+- [ ] Create SNS topic for bounce/complaint notifications  _(CLI — see runbook)_
+- [ ] Create SQS queue; subscribe it to the SNS topic  _(CLI — see runbook)_
+- [ ] Configure SES to publish bounce + complaint events to the SNS topic  _(CLI — see runbook)_
+- [x] Write `worker/lib/ses.js` — wrapper around `SendEmail` with error handling _(as `worker/lib/ses.ts`, done in 1.7)_
+
+> **1.4 notes**
+> - Code side is complete: `@aws-sdk/client-ses` installed + configured;
+>   `worker/lib/ses.ts` wraps `SendEmail` with error handling + a **dry-run**
+>   fallback (auto when no AWS creds). The worker reads `NUXT_AWS_REGION`,
+>   `NUXT_AWS_ACCESS_KEY_ID`, `NUXT_AWS_SECRET_ACCESS_KEY`, and sends with the
+>   campaign's from_name/email (defaulting to `NUXT_SES_FROM_*`).
+> - The remaining items are AWS-account + DNS work that can't be done from this
+>   repo. Full copy-paste runbook (IAM policy, DKIM/SPF, production-access
+>   request, SNS topic, SQS queue + subscription + policy, SES→SNS publishing,
+>   `.env` values, SES-simulator verification) is in **`docs/SES_SETUP.md`**.
+> - No AWS CLI / credentials are configured in this environment, so the
+>   scriptable steps (SNS/SQS/SES wiring) are left for you to run per the runbook.
+>   Once `.env` has the AWS keys (and `NUXT_SES_DRY_RUN` is unset), the worker
+>   sends for real with no code change. Bounce/complaint consumption is task 1.8.
 
 ### 1.5 Contact management
-- [ ] `GET /api/contacts` — list with pagination, search by email, filter by status
-- [ ] `POST /api/contacts` — create single contact (Zod validation)
-- [ ] `PATCH /api/contacts/:id` — update contact
-- [ ] `DELETE /api/contacts/:id` — soft-delete (set status = 'deleted')
-- [ ] Contacts list page (`/contacts`) — table with search + pagination
-- [ ] Contact detail/edit modal
+- [x] `GET /api/contacts` — list with pagination, search by email, filter by status
+- [x] `POST /api/contacts` — create single contact (Zod validation)
+- [x] `PATCH /api/contacts/:id` — update contact
+- [x] `DELETE /api/contacts/:id` — soft-delete (set `deleted_at`, not status)
+- [x] Contacts list page (`/contacts`) — table with search + pagination
+- [x] Contact detail/edit modal
+
+> **1.5 UI notes (built from Claude Design handoff in `docs/design-sistemi-olu-tur`)**
+> - Adopted the design's **left-sidebar app shell** app-wide: rewrote
+>   `app/layouts/default.vue` (Sendinal brand, real nav routes, Log Out wired).
+> - Design tokens (warm-gray + slate-teal palette, fonts, radii, shadows) live as
+>   CSS variables in `app/assets/css/main.css`; DM Sans / Inter / JetBrains Mono +
+>   Phosphor icons loaded via `nuxt.config` `app.head`. Built pixel-faithful with
+>   plain CSS (NOT Nuxt UI components) to match the palette exactly.
+> - `app/pages/contacts/index.vue`: top search bar (debounced), 5 status tabs
+>   (incl. Complained) with live counts from new `GET /api/contacts/stats`,
+>   row selection + bulk delete, single delete, add/edit, server pagination,
+>   empty state. All wired to the 1.5 API.
+> - Components: `app/components/contacts/{ContactStatusBadge,ContactFormModal,
+>   DeleteConfirmModal}.vue`. Add/Edit modal was NOT in the design file — built
+>   per the design system's modal/input/button specs.
+> - Per scope decision (“table + CRUD only”): the middle **Lists & Segments
+>   panel** and the **Filter / Import CSV / Add-to-list / Export** actions were
+>   intentionally NOT drawn (they belong to 1.6+).
+> - “Last Opened” column shows “—” (needs email_events, Phase 2.3).
+> - `docs/**` added to ESLint ignores (vendored prototype bundle).
+> - Verified: `typecheck`, `lint`, `npm run build` all clean; `/contacts` →
+>   302 `/login` when unauthenticated; `/api/contacts/stats` → 401 without auth.
+>   NOTE: full visual/interaction check needs a logged-in session (no test
+>   credentials on hand) — recommend `npm run dev` + sign in to eyeball it.
+
+> **1.5 notes (API done; UI pages provided separately by the user)**
+> - Soft-delete uses a new `deleted_at TIMESTAMPTZ` column (migration
+>   `20260623000011`), NOT a `status='deleted'` value — keeps `status` meaning
+>   "send eligibility" and preserves history. APPLIED + verified (column +
+>   `contacts_active_created_idx` partial index present).
+> - Routes: `server/api/contacts/{index.get,index.post,[id].patch,[id].delete}.ts`.
+>   All call `requireUser(event)` first — verified each returns 401 without a
+>   session. Use `serverSupabaseClient<Database>` (RLS applies; any authenticated
+>   user allowed).
+> - `GET`: pagination (`page`/`limit`≤100), `search` (ilike on email), `status`
+>   filter, `includeDeleted` (default false). Returns `{ data, total, page, limit }`.
+> - `POST`: emails normalised to lowercase (shared schema). If a soft-deleted
+>   contact with the same email exists, it is RESTORED + updated; an active
+>   duplicate → 409. New insert → 201.
+> - `PATCH`: partial update, camelCase→snake_case mapping, only non-deleted rows,
+>   sets `updated_at` manually (trigger deferred to 4.3); unique collision → 409,
+>   missing → 404.
+> - Added `listContactsQuerySchema` to `shared/schemas/contact.ts`; types file
+>   gained `contacts.deleted_at` + per-table `Relationships` (required by
+>   supabase-js or write payloads type as `never`).
+> - For UI: server type `Database['public']['Tables']['contacts']['Row']` is the
+>   contact shape; list endpoint response is `{ data, total, page, limit }`.
 
 ### 1.6 List management
-- [ ] `GET /api/lists` — list all lists
-- [ ] `POST /api/lists` — create list
-- [ ] `POST /api/lists/:id/contacts` — add contacts to list
-- [ ] `DELETE /api/lists/:id/contacts/:contactId` — remove contact from list
-- [ ] Lists page (`/lists`) — CRUD UI
-- [ ] CSV import: `POST /api/contacts/import` — parse CSV, upsert contacts, optionally add to a list
-- [ ] CSV import UI — file upload + list selector + column mapping
+- [x] `GET /api/lists` — list all lists
+- [x] `POST /api/lists` — create list
+- [x] `POST /api/lists/:id/contacts` — add contacts to list
+- [x] `DELETE /api/lists/:id/contacts/:contactId` — remove contact from list
+- [ ] Lists page (`/lists`) — CRUD UI  _(UI: user-provided design pending)_
+- [x] CSV import: `POST /api/contacts/import` — upsert contacts, optionally add to a list
+- [ ] CSV import UI — file upload + list selector + column mapping  _(UI: user-provided design pending)_
+
+> **1.6 notes (backend done; UI pages awaiting user-provided design)**
+> - Routes (all `requireUser`-guarded, `serverSupabaseClient<Database>`):
+>   - `GET /api/lists` → each list + `contactCount` (one tally pass over
+>     `list_contacts`).
+>   - `POST /api/lists` (201) / `PATCH /api/lists/:id` (rename/desc) /
+>     `DELETE /api/lists/:id` (cascade removes membership, keeps contacts).
+>     PATCH+DELETE added beyond the original spec to support the CRUD UI.
+>   - `POST /api/lists/:id/contacts` `{ contactIds: uuid[] }` — idempotent
+>     (upsert ignoreDuplicates); unknown contact → 400 (FK 23503).
+>   - `DELETE /api/lists/:id/contacts/:contactId` — removes membership; 404 if
+>     not a member.
+> - `GET /api/contacts` gained a **`listId`** filter (resolves member ids, then
+>   `.in('id', …)`) — backs the Contacts "Lists & Segments" panel + list filter.
+> - **CSV import contract for the UI**: the page parses the CSV + maps columns
+>   client-side (e.g. papaparse), then POSTs JSON to `/api/contacts/import`:
+>   `{ listId?: uuid, contacts: [{ email, firstName?, lastName?, attributes? }] }`
+>   (max 10000). Server upserts by email (existing updated, soft-deleted
+>   RESTORED), adds all to `listId` if given. Import is authoritative — a blank
+>   name overwrites. Returns `{ received, imported, listId }`.
+> - New schemas: `shared/schemas/list.ts` (create/update/addContacts) +
+>   `importContactsSchema` in `contact.ts`; `listId` added to
+>   `listContactsQuerySchema`.
+> - Verified end-to-end (authenticated session, 17/17): list CRUD, add/remove
+>   members, `contactCount`, `listId` filter, import upsert + list assignment,
+>   plus 400/404 edge cases. `typecheck` + `lint` clean.
+> - UI still TODO once you share the design: `/lists` CRUD page, the Contacts
+>   Lists & Segments panel (filter by list), and the CSV import flow.
 
 ### 1.7 Basic campaign sending
-- [ ] `POST /api/campaigns` — create draft campaign
-- [ ] `PATCH /api/campaigns/:id` — update campaign
-- [ ] `POST /api/campaigns/:id/send` — dispatch immediately (enqueue `campaign.dispatch` job)
-- [ ] BullMQ `campaign.dispatch` processor — fan-out to `email.send` jobs
-- [ ] BullMQ `email.send` processor — send via SES, update `sends` table
-- [ ] Retry logic: exponential backoff, max 3 attempts, write error to `sends` table on final failure
-- [ ] Rate limiter on `email.send` queue matching SES per-second quota
+- [x] `POST /api/campaigns` — create draft campaign
+- [x] `PATCH /api/campaigns/:id` — update campaign
+- [x] `POST /api/campaigns/:id/send` — dispatch immediately (enqueue `campaign.dispatch` job)
+- [x] BullMQ `campaign.dispatch` processor — fan-out to `email.send` jobs
+- [x] BullMQ `email.send` processor — send via SES, update `sends` table
+- [x] Retry logic: exponential backoff, max 3 attempts, write error to `sends` table on final failure
+- [x] Rate limiter on `email.send` queue matching SES per-second quota
+
+> **1.7 notes**
+> - Schemas: `createCampaignSchema` / `updateCampaignSchema` in
+>   `shared/schemas/campaign.ts`. `POST /api/campaigns` creates a `draft`
+>   (html/design default empty — filled by the 2.1 editor; from_name/email
+>   default to runtimeConfig SES sender). `PATCH` edits content but is locked
+>   (409) once a campaign leaves draft/scheduled.
+> - `POST /api/campaigns/:id/send`: validates draft/scheduled + has a list,
+>   atomically claims it (`status→sending`, guards double-dispatch), enqueues a
+>   `campaign.dispatch` job via `server/utils/queue.ts`. Rolls back to draft +
+>   503 if Redis/enqueue is unavailable.
+> - Worker: `campaign.dispatch` resolves list members (active, not deleted),
+>   bulk-inserts `sends` rows, and `addBulk`s one `email.send` per recipient
+>   (attempts: 3, exponential backoff 5s). `email.send` calls the SES wrapper,
+>   marks the send `sent` + stores `ses_message_id`, and finalizes the campaign
+>   to `sent` once no sends remain `queued`. Idempotent (skips already-sent).
+> - Terminal failure handled in the worker's `email.send` `failed` event (after
+>   attempts exhausted): marks the send `failed` + records error, then finalizes.
+> - Rate limiter on the `email.send` Worker: `{ max: NUXT_SES_RATE_LIMIT_PER_SECOND
+>   (default 14), duration: 1000 }`.
+> - `worker/lib/ses.ts` — SES `SendEmail` wrapper with **dry-run** mode (auto when
+>   no AWS creds, or `NUXT_SES_DRY_RUN=true`) so the pipeline runs before the 1.4
+>   AWS setup is done. `worker/lib/supabase.ts` — service-role client (bypasses
+>   RLS). Tracking-token injection (open/click/unsubscribe) is deferred to 2.3–2.5;
+>   1.7 sends the campaign HTML as-is.
+> - Local dev needs Redis (`redis-server`, or `brew services start redis`);
+>   run the worker with `node --env-file=.env worker/index.ts`.
+> - Verified end-to-end (Redis + worker dry-run, 9/9): create draft, edit draft,
+>   send → sending → worker fan-out (4 recipients) → all dry-run sent → campaign
+>   finalized `sent` (recipients=4); plus guards: send-without-list 400,
+>   double-send 409, edit-while-sending 409. `typecheck` + worker `tsc` + `lint`
+>   clean. NOTE: the retry/terminal-failure branch is code-complete but not
+>   exercised (dry-run always succeeds); it'll be hit once real SES (1.4) can error.
+
+> **Campaigns LIST page pulled forward (from Claude Design `Campaigns.dc.html`)**
+> Built ahead of 1.7 to satisfy a design handoff. Read-only for now — creation
+> (POST/send/processors) is still the actual 1.7 work below; this just lists +
+> deletes what exists.
+> - Migration `20260623000012`: added `'failed'` to the campaigns status CHECK
+>   (kept `'cancelled'`). Applied + verified. `CampaignStatus` type + new
+>   `shared/schemas/campaign.ts` updated to the 6-value set.
+> - `GET /api/campaigns` (paginated, search on name/subject, status filter,
+>   server sort by name/status/sentDate/createdAt) enriched per-row with
+>   `recipients` (count of `sends`), `openRate`, `clickRate` (unique opens|clicks
+>   ÷ recipients from `email_events`; null until sent). Metrics computed in-app
+>   per page — move to a cached/aggregated query at scale (4.7).
+> - `DELETE /api/campaigns/:id` (cascades sends/events/tokens).
+> - Page `app/pages/campaigns/index.vue`: design-system table with sortable
+>   headers (derived columns sorted client-side), status filter dropdown,
+>   debounced search, row selection + bulk delete, single delete, rate bars,
+>   `sending` pulse badge, empty state, pagination. "New Campaign" → `/campaigns/new`
+>   (404 until the 2.1 builder exists).
+> - Generic `app/components/ConfirmDeleteModal.vue` (moved out of `contacts/`;
+>   contacts page updated to use it) + `campaigns/CampaignStatusBadge.vue`.
+> - Filters not yet wired (no backing): the design's "Last 90 days" date-range
+>   and "All lists" buttons were omitted (consistent with the Contacts scope
+>   call). Open/click rates stay 0/— until Phase 2 tracking lands.
+> - Verified end-to-end (authenticated, 16/16): metric computation (5 recipients
+>   → 60.0% open / 20.0% click), status filter, search, server sort, SSR render
+>   with rate display, delete cascade, 400/404 edge cases. `typecheck`+`lint`+
+>   `build` clean.
 
 ### 1.8 Bounce & complaint handling
 - [ ] `POST /api/webhooks/ses` — verify SNS signature, parse SES notification

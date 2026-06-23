@@ -1,0 +1,1362 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="./support.js"></script>
+  </head>
+  <body>
+    <x-dc>
+      <helmet>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+          href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&display=swap"
+          rel="stylesheet"
+        />
+        <link
+          rel="stylesheet"
+          href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css"
+        />
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+          html,
+          body {
+            margin: 0;
+            padding: 0;
+          }
+          body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: #f8f7f5;
+            color: #534d46;
+            -webkit-font-smoothing: antialiased;
+          }
+          @keyframes sendingpulse {
+            0%,
+            100% {
+              opacity: 1;
+            }
+            50% {
+              opacity: 0.35;
+            }
+          }
+          @keyframes modalin {
+            from {
+              opacity: 0;
+              transform: translateY(8px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          @keyframes overlayin {
+            from {
+              opacity: 0;
+            }
+            to {
+              opacity: 1;
+            }
+          }
+          ::placeholder {
+            color: #a09990;
+          }
+        </style>
+      </helmet>
+
+      <div
+        style="
+          display: flex;
+          height: 100vh;
+          width: 100%;
+          overflow: hidden;
+          background: #f8f7f5;
+        "
+      >
+        <!-- ============ FAR-LEFT NAV SIDEBAR ============ -->
+        <nav
+          style="
+            width: 240px;
+            flex: none;
+            background: #f0eeeb;
+            border-right: 1px solid #e2ded9;
+            display: flex;
+            flex-direction: column;
+            padding: 20px 16px;
+          "
+        >
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              padding: 4px 8px 22px 8px;
+            "
+          >
+            <div
+              style="
+                width: 36px;
+                height: 36px;
+                border-radius: 9px;
+                background: #1a7a6e;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex: none;
+              "
+            >
+              <i
+                class="ph ph-paper-plane-tilt"
+                style="font-size: 19px; color: #ffffff"
+              ></i>
+            </div>
+            <div style="line-height: 1.2">
+              <div
+                style="
+                  font-family: 'DM Sans', sans-serif;
+                  font-weight: 500;
+                  font-size: 16px;
+                  color: #28241e;
+                "
+              >
+                EmailPro
+              </div>
+              <div style="font-size: 12px; color: #787068">Marketing Admin</div>
+            </div>
+          </div>
+
+          <button
+            style="
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 8px;
+              height: 40px;
+              border: none;
+              border-radius: 6px;
+              background: #1a7a6e;
+              color: #fff;
+              font-family: 'Inter', sans-serif;
+              font-size: 14px;
+              font-weight: 500;
+              cursor: pointer;
+              margin-bottom: 24px;
+              transition: background-color 100ms ease;
+            "
+            style-hover="background:#0f5247;"
+          >
+            <i class="ph ph-plus" style="font-size: 16px"></i> New Campaign
+          </button>
+
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                height: 36px;
+                padding: 0 12px;
+                border-radius: 6px;
+                color: #534d46;
+                font-size: 14px;
+                cursor: pointer;
+                transition: background-color 120ms ease;
+              "
+              style-hover="background:#e2ded9; color:#28241e;"
+            >
+              <i
+                class="ph ph-paper-plane-tilt"
+                style="font-size: 20px; color: #787068"
+              ></i>
+              Campaigns
+            </div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                height: 36px;
+                padding: 0 12px;
+                border-radius: 6px;
+                background: #c8ebe4;
+                color: #0f5247;
+                font-weight: 500;
+                font-size: 14px;
+                cursor: pointer;
+                border-left: 2px solid #1a7a6e;
+                padding-left: 10px;
+              "
+            >
+              <i
+                class="ph ph-users"
+                style="font-size: 20px; color: #1a7a6e"
+              ></i>
+              Contacts
+            </div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                height: 36px;
+                padding: 0 12px;
+                border-radius: 6px;
+                color: #534d46;
+                font-size: 14px;
+                cursor: pointer;
+                transition: background-color 120ms ease;
+              "
+              style-hover="background:#e2ded9; color:#28241e;"
+            >
+              <i
+                class="ph ph-layout"
+                style="font-size: 20px; color: #787068"
+              ></i>
+              Templates
+            </div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                height: 36px;
+                padding: 0 12px;
+                border-radius: 6px;
+                color: #534d46;
+                font-size: 14px;
+                cursor: pointer;
+                transition: background-color 120ms ease;
+              "
+              style-hover="background:#e2ded9; color:#28241e;"
+            >
+              <i
+                class="ph ph-chart-line-up"
+                style="font-size: 20px; color: #787068"
+              ></i>
+              Analytics
+            </div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                height: 36px;
+                padding: 0 12px;
+                border-radius: 6px;
+                color: #534d46;
+                font-size: 14px;
+                cursor: pointer;
+                transition: background-color 120ms ease;
+              "
+              style-hover="background:#e2ded9; color:#28241e;"
+            >
+              <i class="ph ph-gear" style="font-size: 20px; color: #787068"></i>
+              Settings
+            </div>
+          </div>
+
+          <div
+            style="
+              margin-top: auto;
+              display: flex;
+              flex-direction: column;
+              gap: 2px;
+              padding-top: 16px;
+              border-top: 1px solid #e2ded9;
+            "
+          >
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                height: 36px;
+                padding: 0 12px;
+                border-radius: 6px;
+                color: #787068;
+                font-size: 14px;
+                cursor: pointer;
+                transition: background-color 120ms ease;
+              "
+              style-hover="background:#e2ded9; color:#28241e;"
+            >
+              <i class="ph ph-question" style="font-size: 20px"></i> Help Center
+            </div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                height: 36px;
+                padding: 0 12px;
+                border-radius: 6px;
+                color: #787068;
+                font-size: 14px;
+                cursor: pointer;
+                transition: background-color 120ms ease;
+              "
+              style-hover="background:#e2ded9; color:#28241e;"
+            >
+              <i class="ph ph-sign-out" style="font-size: 20px"></i> Log Out
+            </div>
+          </div>
+        </nav>
+
+        <!-- ============ LISTS & SEGMENTS PANEL ============ -->
+        <aside
+          style="
+            width: 264px;
+            flex: none;
+            background: #ffffff;
+            border-right: 1px solid #e2ded9;
+            display: flex;
+            flex-direction: column;
+            padding: 24px 16px;
+          "
+        >
+          <div
+            style="
+              font-size: 11px;
+              font-weight: 500;
+              letter-spacing: 0.5px;
+              text-transform: uppercase;
+              color: #a09990;
+              padding: 0 12px 14px 12px;
+            "
+          >
+            Lists &amp; Segments
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <sc-for list="{{ lists }}" as="lst" hint-placeholder-count="4">
+              <div onClick="{{ lst.onSelect }}" style="{{ lst.rowStyle }}">
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    min-width: 0;
+                  "
+                >
+                  <i
+                    class="{{ lst.iconClass }}"
+                    style="{{ lst.iconStyle }}"
+                  ></i>
+                  <span
+                    style="
+                      overflow: hidden;
+                      text-overflow: ellipsis;
+                      white-space: nowrap;
+                    "
+                    >{{ lst.name }}</span
+                  >
+                </div>
+                <span style="{{ lst.countStyle }}">{{ lst.count }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              height: 36px;
+              padding: 0 12px;
+              margin-top: 8px;
+              border-radius: 6px;
+              color: #1a7a6e;
+              font-size: 14px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: background-color 120ms ease;
+            "
+            style-hover="background:#edf7f5;"
+          >
+            <i class="ph ph-plus" style="font-size: 18px"></i> Create New List
+          </div>
+        </aside>
+
+        <!-- ============ MAIN CONTENT ============ -->
+        <main
+          style="
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+          "
+        >
+          <!-- Top utility bar -->
+          <div
+            style="
+              height: 64px;
+              flex: none;
+              display: flex;
+              align-items: center;
+              gap: 16px;
+              padding: 0 28px;
+              border-bottom: 1px solid #e2ded9;
+              background: #f8f7f5;
+            "
+          >
+            <div style="position: relative; flex: 1; max-width: 420px">
+              <i
+                class="ph ph-magnifying-glass"
+                style="
+                  position: absolute;
+                  left: 12px;
+                  top: 50%;
+                  transform: translateY(-50%);
+                  font-size: 16px;
+                  color: #a09990;
+                "
+              ></i>
+              <input
+                value="{{ query }}"
+                onInput="{{ onSearch }}"
+                placeholder="Search contacts by name or email…"
+                style="
+                  width: 100%;
+                  height: 36px;
+                  padding: 0 12px 0 34px;
+                  border: 1px solid #e2ded9;
+                  border-radius: 6px;
+                  background: #fff;
+                  font-family: 'Inter', sans-serif;
+                  font-size: 14px;
+                  color: #28241e;
+                  outline: none;
+                "
+                style-focus="border-color:#1a7a6e; outline:2px solid #c8ebe4; outline-offset:0;"
+              />
+            </div>
+            <div
+              style="
+                margin-left: auto;
+                display: flex;
+                align-items: center;
+                gap: 14px;
+              "
+            >
+              <button
+                style="
+                  width: 36px;
+                  height: 36px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  border: 1px solid #e2ded9;
+                  border-radius: 6px;
+                  background: #fff;
+                  color: #787068;
+                  cursor: pointer;
+                "
+                style-hover="background:#f8f7f5; color:#28241e;"
+              >
+                <i class="ph ph-bell" style="font-size: 18px"></i>
+              </button>
+              <div
+                style="
+                  width: 34px;
+                  height: 34px;
+                  border-radius: 9999px;
+                  background: #1a7a6e;
+                  color: #fff;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  font-family: 'DM Sans', sans-serif;
+                  font-weight: 500;
+                  font-size: 13px;
+                "
+              >
+                AR
+              </div>
+            </div>
+          </div>
+
+          <!-- Scroll area -->
+          <div style="flex: 1; overflow-y: auto; padding: 28px">
+            <div style="max-width: 1180px; margin: 0 auto">
+              <!-- Page header -->
+              <div
+                style="
+                  display: flex;
+                  align-items: flex-end;
+                  justify-content: space-between;
+                  gap: 24px;
+                  margin-bottom: 24px;
+                "
+              >
+                <div>
+                  <div
+                    style="font-size: 13px; color: #787068; margin-bottom: 6px"
+                  >
+                    Contacts
+                  </div>
+                  <h1
+                    style="
+                      margin: 0;
+                      font-family: 'DM Sans', sans-serif;
+                      font-weight: 500;
+                      font-size: 28px;
+                      line-height: 1.2;
+                      color: #28241e;
+                    "
+                  >
+                    {{ activeListName }}
+                  </h1>
+                  <div style="font-size: 13px; color: #787068; margin-top: 6px">
+                    {{ subtitle }}
+                  </div>
+                </div>
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    flex: none;
+                  "
+                >
+                  <button
+                    onClick="{{ onFilter }}"
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 8px;
+                      height: 36px;
+                      padding: 0 14px;
+                      border: 1px solid #e2ded9;
+                      border-radius: 6px;
+                      background: #fff;
+                      color: #3d3830;
+                      font-size: 14px;
+                      font-weight: 500;
+                      cursor: pointer;
+                      transition: background-color 100ms ease;
+                    "
+                    style-hover="background:#f8f7f5; border-color:#c9c4bd;"
+                  >
+                    <i class="ph ph-funnel" style="font-size: 16px"></i> Filter
+                  </button>
+                  <button
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 8px;
+                      height: 36px;
+                      padding: 0 14px;
+                      border: 1px solid #e2ded9;
+                      border-radius: 6px;
+                      background: #fff;
+                      color: #3d3830;
+                      font-size: 14px;
+                      font-weight: 500;
+                      cursor: pointer;
+                      transition: background-color 100ms ease;
+                    "
+                    style-hover="background:#f8f7f5; border-color:#c9c4bd;"
+                  >
+                    <i class="ph ph-upload-simple" style="font-size: 16px"></i>
+                    Import CSV
+                  </button>
+                  <button
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 8px;
+                      height: 36px;
+                      padding: 0 16px;
+                      border: none;
+                      border-radius: 6px;
+                      background: #1a7a6e;
+                      color: #fff;
+                      font-size: 14px;
+                      font-weight: 500;
+                      cursor: pointer;
+                      transition: background-color 100ms ease;
+                    "
+                    style-hover="background:#0f5247;"
+                  >
+                    <i class="ph ph-user-plus" style="font-size: 16px"></i> Add
+                    Contact
+                  </button>
+                </div>
+              </div>
+
+              <!-- Status tabs -->
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 6px;
+                  padding: 4px;
+                  background: #f0eeeb;
+                  border-radius: 8px;
+                  width: fit-content;
+                  margin-bottom: 20px;
+                "
+              >
+                <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="4">
+                  <button onClick="{{ tab.onClick }}" style="{{ tab.style }}">
+                    {{ tab.label }}
+                    <span style="{{ tab.countStyle }}">{{ tab.count }}</span>
+                  </button>
+                </sc-for>
+              </div>
+
+              <!-- Selection bar -->
+              <sc-if
+                value="{{ hasSelection }}"
+                hint-placeholder-val="{{ false }}"
+              >
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 16px;
+                    height: 48px;
+                    padding: 0 16px;
+                    margin-bottom: 16px;
+                    background: #edf7f5;
+                    border: 1px solid #94d5c8;
+                    border-radius: 8px;
+                  "
+                >
+                  <span
+                    style="font-size: 14px; font-weight: 500; color: #0f5247"
+                    >{{ selectedCount }} selected</span
+                  >
+                  <div
+                    style="width: 1px; height: 20px; background: #94d5c8"
+                  ></div>
+                  <button
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 6px;
+                      height: 30px;
+                      padding: 0 10px;
+                      border: none;
+                      border-radius: 6px;
+                      background: transparent;
+                      color: #0f5247;
+                      font-size: 13px;
+                      font-weight: 500;
+                      cursor: pointer;
+                    "
+                    style-hover="background:#c8ebe4;"
+                  >
+                    <i class="ph ph-list-plus" style="font-size: 16px"></i> Add
+                    to list
+                  </button>
+                  <button
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 6px;
+                      height: 30px;
+                      padding: 0 10px;
+                      border: none;
+                      border-radius: 6px;
+                      background: transparent;
+                      color: #0f5247;
+                      font-size: 13px;
+                      font-weight: 500;
+                      cursor: pointer;
+                    "
+                    style-hover="background:#c8ebe4;"
+                  >
+                    <i class="ph ph-export" style="font-size: 16px"></i> Export
+                  </button>
+                  <button
+                    onClick="{{ onBulkDelete }}"
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 6px;
+                      height: 30px;
+                      padding: 0 10px;
+                      border: none;
+                      border-radius: 6px;
+                      background: transparent;
+                      color: #c0272d;
+                      font-size: 13px;
+                      font-weight: 500;
+                      cursor: pointer;
+                    "
+                    style-hover="background:#fde8e8;"
+                  >
+                    <i class="ph ph-trash" style="font-size: 16px"></i> Delete
+                  </button>
+                  <button
+                    onClick="{{ onClearSelection }}"
+                    style="
+                      margin-left: auto;
+                      height: 30px;
+                      padding: 0 10px;
+                      border: none;
+                      border-radius: 6px;
+                      background: transparent;
+                      color: #534d46;
+                      font-size: 13px;
+                      cursor: pointer;
+                    "
+                    style-hover="background:#c8ebe4;"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </sc-if>
+
+              <!-- Table -->
+              <div
+                style="
+                  background: #fff;
+                  border: 1px solid #e2ded9;
+                  border-radius: 10px;
+                  overflow: hidden;
+                "
+              >
+                <!-- header row -->
+                <div
+                  style="
+                    display: grid;
+                    grid-template-columns: 44px 2.2fr 2.4fr 1.3fr 1.2fr 1.2fr 92px;
+                    align-items: center;
+                    height: 40px;
+                    padding: 0 16px;
+                    background: #f8f7f5;
+                    border-bottom: 1px solid #e2ded9;
+                    font-size: 11px;
+                    font-weight: 500;
+                    letter-spacing: 0.5px;
+                    text-transform: uppercase;
+                    color: #787068;
+                  "
+                >
+                  <div onClick="{{ onToggleAll }}" style="cursor: pointer">
+                    <div style="{{ headerCheckStyle }}">
+                      <sc-if
+                        value="{{ allChecked }}"
+                        hint-placeholder-val="{{ false }}"
+                        ><i
+                          class="ph ph-check"
+                          style="font-size: 12px; color: #fff"
+                        ></i
+                      ></sc-if>
+                    </div>
+                  </div>
+                  <div>Contact</div>
+                  <div>Email</div>
+                  <div>Status</div>
+                  <div>Last Opened</div>
+                  <div>Date Added</div>
+                  <div style="text-align: right">Actions</div>
+                </div>
+
+                <!-- body -->
+                <sc-for
+                  list="{{ contacts }}"
+                  as="c"
+                  hint-placeholder-count="10"
+                >
+                  <div
+                    onMouseEnter="{{ c.onEnter }}"
+                    onMouseLeave="{{ c.onLeave }}"
+                    style="{{ c.rowStyle }}"
+                  >
+                    <div onClick="{{ c.onToggle }}" style="cursor: pointer">
+                      <div style="{{ c.checkStyle }}">
+                        <sc-if
+                          value="{{ c.selected }}"
+                          hint-placeholder-val="{{ false }}"
+                          ><i
+                            class="ph ph-check"
+                            style="font-size: 12px; color: #fff"
+                          ></i
+                        ></sc-if>
+                      </div>
+                    </div>
+                    <div
+                      style="
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                        min-width: 0;
+                      "
+                    >
+                      <div style="{{ c.avatarStyle }}">{{ c.initials }}</div>
+                      <span
+                        style="
+                          font-size: 14px;
+                          color: #28241e;
+                          overflow: hidden;
+                          text-overflow: ellipsis;
+                          white-space: nowrap;
+                        "
+                        >{{ c.name }}</span
+                      >
+                    </div>
+                    <div
+                      style="
+                        font-family: 'JetBrains Mono', monospace;
+                        font-size: 13px;
+                        color: #534d46;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
+                      "
+                    >
+                      {{ c.email }}
+                    </div>
+                    <div>
+                      <span style="{{ c.badgeStyle }}"
+                        ><span style="{{ c.dotStyle }}"></span>{{ c.statusLabel
+                        }}</span
+                      >
+                    </div>
+                    <div style="font-size: 13px; color: #787068">
+                      {{ c.lastOpened }}
+                    </div>
+                    <div style="font-size: 13px; color: #787068">
+                      {{ c.dateAdded }}
+                    </div>
+                    <div
+                      style="display:flex; align-items:center; justify-content:flex-end; gap:2px; opacity:{{ c.actionOpacity }}; transition:opacity 120ms ease;"
+                    >
+                      <button
+                        style="
+                          width: 30px;
+                          height: 30px;
+                          display: flex;
+                          align-items: center;
+                          justify-content: center;
+                          border: none;
+                          border-radius: 6px;
+                          background: transparent;
+                          color: #787068;
+                          cursor: pointer;
+                        "
+                        style-hover="background:#f0eeeb; color:#28241e;"
+                      >
+                        <i
+                          class="ph ph-pencil-simple"
+                          style="font-size: 16px"
+                        ></i>
+                      </button>
+                      <button
+                        onClick="{{ c.onDelete }}"
+                        style="
+                          width: 30px;
+                          height: 30px;
+                          display: flex;
+                          align-items: center;
+                          justify-content: center;
+                          border: none;
+                          border-radius: 6px;
+                          background: transparent;
+                          color: #787068;
+                          cursor: pointer;
+                        "
+                        style-hover="background:#fde8e8; color:#c0272d;"
+                      >
+                        <i class="ph ph-trash" style="font-size: 16px"></i>
+                      </button>
+                    </div>
+                  </div>
+                </sc-for>
+
+                <!-- empty state -->
+                <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding: 64px 32px; text-align: center">
+                    <div
+                      style="
+                        width: 56px;
+                        height: 56px;
+                        border-radius: 16px;
+                        background: #f0eeeb;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin: 0 auto 24px;
+                      "
+                    >
+                      <i
+                        class="ph ph-magnifying-glass"
+                        style="font-size: 26px; color: #c9c4bd"
+                      ></i>
+                    </div>
+                    <div
+                      style="
+                        font-family: 'DM Sans', sans-serif;
+                        font-weight: 500;
+                        font-size: 18px;
+                        color: #28241e;
+                        margin-bottom: 8px;
+                      "
+                    >
+                      No contacts match your filters
+                    </div>
+                    <div
+                      style="
+                        font-size: 13px;
+                        color: #787068;
+                        max-width: 360px;
+                        margin: 0 auto;
+                      "
+                    >
+                      Try a different status tab or clear your search to see
+                      everyone on this list.
+                    </div>
+                  </div>
+                </sc-if>
+
+                <!-- footer -->
+                <sc-if value="{{ hasRows }}" hint-placeholder-val="{{ true }}">
+                  <div
+                    style="
+                      display: flex;
+                      align-items: center;
+                      justify-content: space-between;
+                      height: 52px;
+                      padding: 0 16px;
+                      border-top: 1px solid #e2ded9;
+                      background: #f8f7f5;
+                    "
+                  >
+                    <span style="font-size: 13px; color: #787068"
+                      >{{ footerText }}</span
+                    >
+                    <div style="display: flex; align-items: center; gap: 8px">
+                      <button
+                        style="
+                          display: flex;
+                          align-items: center;
+                          gap: 6px;
+                          height: 32px;
+                          padding: 0 12px;
+                          border: 1px solid #e2ded9;
+                          border-radius: 6px;
+                          background: #fff;
+                          color: #a09990;
+                          font-size: 13px;
+                          font-weight: 500;
+                          cursor: not-allowed;
+                        "
+                      >
+                        <i class="ph ph-caret-left" style="font-size: 14px"></i>
+                        Previous
+                      </button>
+                      <button
+                        style="
+                          display: flex;
+                          align-items: center;
+                          gap: 6px;
+                          height: 32px;
+                          padding: 0 12px;
+                          border: 1px solid #e2ded9;
+                          border-radius: 6px;
+                          background: #fff;
+                          color: #3d3830;
+                          font-size: 13px;
+                          font-weight: 500;
+                          cursor: pointer;
+                        "
+                        style-hover="background:#f0eeeb;"
+                      >
+                        Next
+                        <i
+                          class="ph ph-caret-right"
+                          style="font-size: 14px"
+                        ></i>
+                      </button>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <!-- ============ DELETE CONFIRM MODAL ============ -->
+        <sc-if value="{{ showDelete }}" hint-placeholder-val="{{ false }}">
+          <div
+            style="
+              position: fixed;
+              inset: 0;
+              background: rgba(24, 21, 15, 0.45);
+              backdrop-filter: blur(2px);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              z-index: 50;
+              animation: overlayin 120ms ease;
+            "
+            onClick="{{ onCancelDelete }}"
+          >
+            <div
+              onClick="{{ stop }}"
+              style="
+                width: 480px;
+                max-width: calc(100vw - 48px);
+                background: #fff;
+                border-radius: 10px;
+                box-shadow:
+                  0 8px 24px rgba(0, 0, 0, 0.1),
+                  0 2px 8px rgba(0, 0, 0, 0.06);
+                animation: modalin 180ms ease-out;
+                overflow: hidden;
+              "
+            >
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 12px;
+                  padding: 20px 24px;
+                  border-bottom: 1px solid #f0eeeb;
+                "
+              >
+                <div
+                  style="
+                    width: 34px;
+                    height: 34px;
+                    border-radius: 8px;
+                    background: #fde8e8;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex: none;
+                  "
+                >
+                  <i
+                    class="ph ph-warning"
+                    style="font-size: 18px; color: #c0272d"
+                  ></i>
+                </div>
+                <h2
+                  style="
+                    margin: 0;
+                    font-family: 'DM Sans', sans-serif;
+                    font-weight: 500;
+                    font-size: 18px;
+                    color: #28241e;
+                  "
+                >
+                  {{ deleteTitle }}
+                </h2>
+              </div>
+              <div style="padding: 24px">
+                <p
+                  style="
+                    margin: 0;
+                    font-size: 14px;
+                    line-height: 1.6;
+                    color: #534d46;
+                  "
+                >
+                  {{ deleteBody }}
+                </p>
+              </div>
+              <div
+                style="
+                  display: flex;
+                  justify-content: flex-end;
+                  gap: 8px;
+                  padding: 16px 24px;
+                  border-top: 1px solid #f0eeeb;
+                "
+              >
+                <button
+                  onClick="{{ onCancelDelete }}"
+                  style="
+                    height: 36px;
+                    padding: 0 16px;
+                    border: 1px solid #e2ded9;
+                    border-radius: 6px;
+                    background: #fff;
+                    color: #3d3830;
+                    font-size: 14px;
+                    font-weight: 500;
+                    cursor: pointer;
+                  "
+                  style-hover="background:#f8f7f5;"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick="{{ onConfirmDelete }}"
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    height: 36px;
+                    padding: 0 16px;
+                    border: 1px solid #fde8e8;
+                    border-radius: 6px;
+                    background: #c0272d;
+                    color: #fff;
+                    font-size: 14px;
+                    font-weight: 500;
+                    cursor: pointer;
+                  "
+                  style-hover="background:#a31f24;"
+                >
+                  <i class="ph ph-trash" style="font-size: 16px"></i> {{
+                  deleteConfirmLabel }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </x-dc>
+    <script type="text/x-dc" data-dc-script>
+      class Component extends DCLogic {
+        state = {
+          activeList: "all",
+          tab: "all",
+          query: "",
+          selected: {},
+          hovered: null,
+          deleteTarget: null, // {type:'single'|'bulk', id, name}
+        };
+
+        lists = [
+          { key: "all", name: "All Contacts", count: "12.4k", icon: "ph ph-users-three" },
+          { key: "product", name: "Product Updates", count: "4.2k", icon: "ph ph-megaphone" },
+          { key: "early", name: "Early Adopters", count: "850", icon: "ph ph-star" },
+          { key: "weekly", name: "Newsletter Weekly", count: "7.1k", icon: "ph ph-envelope-simple" },
+        ];
+
+        data = [
+          { id: 1, name: "Eleanor Knox", email: "eleanor.k@example.com", status: "active", lastOpened: "Jun 21, 2026", dateAdded: "Jan 12, 2026" },
+          { id: 2, name: "Marcus Reed", email: "m.reed.tech@domain.co", status: "unsubscribed", lastOpened: "Apr 15, 2026", dateAdded: "Feb 03, 2026" },
+          { id: 3, name: "Sophia Wright", email: "sophia.w@studio.design", status: "bounced", lastOpened: "—", dateAdded: "Mar 22, 2026" },
+          { id: 4, name: "James Chen", email: "jchen@startup.io", status: "active", lastOpened: "Jun 22, 2026", dateAdded: "Apr 05, 2026" },
+          { id: 5, name: "Liam Davis", email: "liam.davis@corp.net", status: "active", lastOpened: "Jun 20, 2026", dateAdded: "May 14, 2026" },
+          { id: 6, name: "Ava Patel", email: "ava.patel@northwind.com", status: "active", lastOpened: "Jun 19, 2026", dateAdded: "May 28, 2026" },
+          { id: 7, name: "Noah Bergström", email: "noah.b@finch.io", status: "unsubscribed", lastOpened: "Mar 11, 2026", dateAdded: "Jan 30, 2026" },
+          { id: 8, name: "Mia Okafor", email: "mia@okaforcreative.com", status: "active", lastOpened: "Jun 18, 2026", dateAdded: "Feb 17, 2026" },
+          { id: 9, name: "Daniel Ruiz", email: "d.ruiz@vellum.app", status: "bounced", lastOpened: "—", dateAdded: "Mar 08, 2026" },
+          { id: 10, name: "Hannah Lindqvist", email: "hannah.l@brightwork.se", status: "active", lastOpened: "Jun 23, 2026", dateAdded: "Jun 02, 2026" },
+        ];
+
+        avatarPalette = [
+          { bg: "#c8ebe4", fg: "#0f5247" },
+          { bg: "#fef3d0", fg: "#92620a" },
+          { bg: "#fde8e8", fg: "#c0272d" },
+          { bg: "#e3f0fd", fg: "#1a5fa8" },
+          { bg: "#fdf0e8", fg: "#984a14" },
+        ];
+
+        statusMeta = {
+          active: { label: "Active", bg: "#dcf3e8", fg: "#1a7a46", border: "#7dd3aa", dot: "#1a7a46" },
+          unsubscribed: { label: "Unsubscribed", bg: "#f0eeeb", fg: "#534d46", border: "#e2ded9", dot: "#a09990" },
+          bounced: { label: "Bounced", bg: "#fdf0e8", fg: "#984a14", border: "#f5c4a0", dot: "#984a14" },
+        };
+
+        initials(name) {
+          const p = name.trim().split(/\s+/);
+          return ((p[0]?.[0] || "") + (p[1]?.[0] || "")).toUpperCase();
+        }
+
+        setTab = (t) => this.setState({ tab: t });
+        setList = (k) => this.setState({ activeList: k, selected: {} });
+        onSearch = (e) => this.setState({ query: e.target.value });
+
+        visible() {
+          let rows = this.data;
+          if (this.state.tab !== "all") rows = rows.filter(r => r.status === this.state.tab);
+          const q = this.state.query.trim().toLowerCase();
+          if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q));
+          return rows;
+        }
+
+        toggleRow = (id) => this.setState(s => {
+          const sel = { ...s.selected };
+          if (sel[id]) delete sel[id]; else sel[id] = true;
+          return { selected: sel };
+        });
+
+        toggleAll = () => {
+          const vis = this.visible();
+          const allOn = vis.length > 0 && vis.every(r => this.state.selected[r.id]);
+          if (allOn) {
+            const sel = { ...this.state.selected };
+            vis.forEach(r => delete sel[r.id]);
+            this.setState({ selected: sel });
+          } else {
+            const sel = { ...this.state.selected };
+            vis.forEach(r => sel[r.id] = true);
+            this.setState({ selected: sel });
+          }
+        };
+
+        clearSel = () => this.setState({ selected: {} });
+        askDeleteSingle = (id, name) => this.setState({ deleteTarget: { type: "single", id, name } });
+        askDeleteBulk = () => this.setState({ deleteTarget: { type: "bulk" } });
+        cancelDelete = () => this.setState({ deleteTarget: null });
+
+        confirmDelete = () => this.setState(s => {
+          const t = s.deleteTarget;
+          if (!t) return { deleteTarget: null };
+          let removeIds;
+          if (t.type === "single") removeIds = new Set([t.id]);
+          else removeIds = new Set(Object.keys(s.selected).map(Number));
+          this.data = this.data.filter(r => !removeIds.has(r.id));
+          const sel = { ...s.selected };
+          removeIds.forEach(id => delete sel[id]);
+          return { deleteTarget: null, selected: sel };
+        });
+
+        noop = () => {};
+        stop = (e) => e.stopPropagation();
+
+        renderVals() {
+          const s = this.state;
+          const vis = this.visible();
+          const selCount = Object.keys(s.selected).length;
+          const allChecked = vis.length > 0 && vis.every(r => s.selected[r.id]);
+
+          const activeList = this.lists.find(l => l.key === s.activeList) || this.lists[0];
+
+          const checkBase = (on) => ({
+            width: "18px", height: "18px", borderRadius: "5px",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            border: on ? "1px solid #1a7a6e" : "1px solid #c9c4bd",
+            background: on ? "#1a7a6e" : "#fff",
+            transition: "background-color 80ms ease, border-color 80ms ease",
+          });
+
+          const lists = this.lists.map(l => {
+            const active = l.key === s.activeList;
+            return {
+              name: l.name, count: l.count, onSelect: () => this.setList(l.key),
+              iconClass: l.icon,
+              iconStyle: { fontSize: "20px", color: active ? "#1a7a6e" : "#787068", flex: "none" },
+              rowStyle: {
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                height: "40px", padding: "0 12px", borderRadius: "6px", cursor: "pointer",
+                fontSize: "14px",
+                fontWeight: active ? 500 : 400,
+                color: active ? "#0f5247" : "#534d46",
+                background: active ? "#c8ebe4" : "transparent",
+                borderLeft: active ? "2px solid #1a7a6e" : "2px solid transparent",
+                transition: "background-color 120ms ease",
+              },
+              countStyle: { fontSize: "12px", color: active ? "#1a7a6e" : "#a09990", fontWeight: active ? 500 : 400, flex: "none", marginLeft: "8px" },
+            };
+          });
+
+          const counts = {
+            all: this.data.length,
+            active: this.data.filter(r => r.status === "active").length,
+            unsubscribed: this.data.filter(r => r.status === "unsubscribed").length,
+            bounced: this.data.filter(r => r.status === "bounced").length,
+          };
+          const tabDefs = [
+            { key: "all", label: "All" },
+            { key: "active", label: "Active" },
+            { key: "unsubscribed", label: "Unsubscribed" },
+            { key: "bounced", label: "Bounced" },
+          ];
+          const tabs = tabDefs.map(t => {
+            const on = s.tab === t.key;
+            return {
+              label: t.label, count: counts[t.key], onClick: () => this.setTab(t.key),
+              style: {
+                display: "flex", alignItems: "center", gap: "7px",
+                height: "32px", padding: "0 14px", border: "none", borderRadius: "6px",
+                fontFamily: "'Inter',sans-serif", fontSize: "13px", fontWeight: 500, cursor: "pointer",
+                background: on ? "#fff" : "transparent",
+                color: on ? "#0f5247" : "#787068",
+                boxShadow: on ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                transition: "background-color 100ms ease",
+              },
+              countStyle: {
+                fontSize: "11px", fontWeight: 500, padding: "1px 6px", borderRadius: "9999px",
+                background: on ? "#edf7f5" : "#e2ded9",
+                color: on ? "#1a7a6e" : "#787068",
+              },
+            };
+          });
+
+          const contacts = vis.map((r, i) => {
+            const on = !!s.selected[r.id];
+            const hov = s.hovered === r.id;
+            const m = this.statusMeta[r.status];
+            const pal = this.avatarPalette[(r.id - 1) % this.avatarPalette.length];
+            return {
+              name: r.name, email: r.email, initials: this.initials(r.name),
+              statusLabel: m.label, lastOpened: r.lastOpened, dateAdded: r.dateAdded,
+              selected: on,
+              onToggle: () => this.toggleRow(r.id),
+              onDelete: () => this.askDeleteSingle(r.id, r.name),
+              onEnter: () => this.setState({ hovered: r.id }),
+              onLeave: () => this.setState({ hovered: null }),
+              actionOpacity: hov ? 1 : 0,
+              checkStyle: checkBase(on),
+              avatarStyle: {
+                width: "32px", height: "32px", borderRadius: "9999px", flex: "none",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontFamily: "'DM Sans',sans-serif", fontWeight: 500, fontSize: "12px",
+                background: pal.bg, color: pal.fg,
+              },
+              badgeStyle: {
+                display: "inline-flex", alignItems: "center", gap: "6px",
+                padding: "3px 10px", borderRadius: "9999px",
+                fontSize: "12px", fontWeight: 500, letterSpacing: "0.2px",
+                background: m.bg, color: m.fg, border: "1px solid " + m.border,
+              },
+              dotStyle: { width: "6px", height: "6px", borderRadius: "9999px", background: m.dot, flex: "none" },
+              rowStyle: {
+                display: "grid",
+                gridTemplateColumns: "44px 2.2fr 2.4fr 1.3fr 1.2fr 1.2fr 92px",
+                alignItems: "center", height: "56px", padding: "0 16px",
+                borderBottom: i === vis.length - 1 ? "none" : "1px solid #f0eeeb",
+                background: on ? "#edf7f5" : (hov ? "#f8f7f5" : "#fff"),
+                transition: "background-color 80ms ease",
+              },
+            };
+          });
+
+          const t = s.deleteTarget;
+          let deleteTitle = "", deleteBody = "", deleteConfirmLabel = "";
+          if (t) {
+            if (t.type === "single") {
+              deleteTitle = "Delete contact?";
+              deleteBody = `${t.name} will be permanently removed from this list. They will no longer receive any campaigns. This action cannot be undone.`;
+              deleteConfirmLabel = "Delete contact";
+            } else {
+              deleteTitle = `Delete ${selCount} contacts?`;
+              deleteBody = `${selCount} contacts will be permanently removed from this list and will no longer receive any campaigns. This action cannot be undone.`;
+              deleteConfirmLabel = `Delete ${selCount} contacts`;
+            }
+          }
+
+          return {
+            lists,
+            activeListName: activeList.name,
+            subtitle: `${activeList.count} contacts in this list`,
+            query: s.query, onSearch: this.onSearch, onFilter: this.noop,
+            tabs,
+            hasSelection: selCount > 0, selectedCount: selCount,
+            onClearSelection: this.clearSel, onBulkDelete: this.askDeleteBulk,
+            allChecked, onToggleAll: this.toggleAll,
+            headerCheckStyle: checkBase(allChecked),
+            contacts,
+            isEmpty: vis.length === 0,
+            hasRows: vis.length > 0,
+            footerText: `Showing ${vis.length} of ${this.data.length} contacts`,
+            showDelete: !!t, deleteTitle, deleteBody, deleteConfirmLabel,
+            onCancelDelete: this.cancelDelete, onConfirmDelete: this.confirmDelete,
+            stop: this.stop,
+          };
+        }
+      }
+    </script>
+  </body>
+</html>
