@@ -547,7 +547,7 @@ Goal: full campaign builder with drag-and-drop editor, scheduling, open/click tr
 
 ### 2.6 Analytics dashboard
 - [x] `GET /api/campaigns/:id/stats` — extend to return open_count, click_count, open_rate, click_rate, bounce_rate
-- [ ] Campaign stats page: summary cards + vue-chartjs line chart (events over time)
+- [x] Campaign stats page: summary cards + vue-chartjs line chart (events over time)
 - [x] Overview dashboard (`/`) — aggregate stats across all campaigns (total sent, avg open rate, avg click rate)
 
 > **2.6 notes (2026-06-25 — Dashboard built from Claude Design handoff `Marketing Hub.dc.html`)**
@@ -575,13 +575,31 @@ Goal: full campaign builder with drag-and-drop editor, scheduling, open/click tr
 >   deltas) — delivered +4 / bounced +1 / totalSent +5 / activeContacts +5,
 >   today's series bucket +4, avgOpenRate computed, page SSR renders cards +
 >   recent table + chart panels. `typecheck` + `lint` clean.
-> - **Remaining (item 2):** per-campaign stats page line chart (events over time).
->   The detail page (1.9) already shows summary cards; needs open/click cards + a
->   time-series chart. No design provided for it yet — awaiting the user's call.
+> **2.6 item 2 — campaign analytics page (built from Claude Design `EmailPro.dc.html`)**
+> - Scope: **Analytics screen only** (the campaigns-list redesign in the same file
+>   was skipped — 1.7's list stands). Export button deferred to 4.4 (shown disabled).
+> - `app/pages/campaigns/[id]/index.vue` rebuilt to the Analytics design:
+>   breadcrumb + title + meta (status/sent/recipients/list), 4 stat cards
+>   (Delivered, Open rate, Click rate, Unsubscribed), an Engagement-over-time line
+>   chart (Opens solid + Clicks dashed), Top clicked links, and a paginated
+>   Individual send results table. Keeps Edit (draft/scheduled) + Cancel
+>   (scheduled) from 1.9.
+> - `GET /api/campaigns/:id/stats` gained `counts.unsubscribed` + `rates.unsubscribe`.
+> - New endpoints: `…/timeseries` (daily opens/clicks, zero-filled, 30-day cap),
+>   `…/links` (top clicked links by total+unique), `…/activity` (paginated send
+>   results with a derived status: clicked > opened > unsubscribed > delivery status).
+> - `EngagementLineChart.client.vue` (vue-chartjs Line). Types: `CampaignTimeseries`,
+>   `CampaignLink`, `CampaignActivityRow`.
+> - Verified end-to-end (real auth + seeded campaign): stats unsub 1/20%, opens/
+>   clicks 60%, timeseries event counts (4 opens/3 clicks), top links total/unique
+>   sorted, activity derived statuses + emails + pagination, and SSR render of the
+>   full page. `nuxt build` + `typecheck` + `lint` clean.
+>
+> **Phase 2 complete.** (2.7 image upload was delivered in 2.1.)
 
 ### 2.7 Supabase Storage image management
-- [ ] Unlayer upload handler: `POST /api/uploads/image` — receives file, uploads to Supabase Storage, returns CDN URL
-- [ ] Restrict uploaded file types to image/* and max 5 MB
+- [x] Unlayer upload handler: `POST /api/uploads/image` — receives file, uploads to Supabase Storage, returns CDN URL  _(delivered in 2.1)_
+- [x] Restrict uploaded file types to image/* and max 5 MB  _(delivered in 2.1)_
 
 ---
 

@@ -60,16 +60,38 @@ export interface CampaignStats {
     failed: number
     bounced: number
     complained: number
-    /** Unique sends with at least one open / click. */
+    /** Unique sends with at least one open / click / unsubscribe. */
     opened: number
     clicked: number
+    unsubscribed: number
   }
   rates: {
     delivered: number | null
     open: number | null
     click: number | null
+    unsubscribe: number | null
     bounce: number | null
     complaint: number | null
     failed: number | null
   }
+}
+
+/** Daily engagement series (GET /api/campaigns/:id/timeseries). */
+export interface CampaignTimeseries {
+  points: { date: string; opens: number; clicks: number }[]
+}
+
+/** Top clicked links (GET /api/campaigns/:id/links). */
+export interface CampaignLink {
+  url: string
+  total: number
+  unique: number
+}
+
+/** A row of individual send results (GET /api/campaigns/:id/activity). */
+export interface CampaignActivityRow {
+  sendId: string
+  email: string
+  status: string
+  at: string | null
 }

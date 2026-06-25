@@ -1,7 +1,14 @@
 <script setup lang="ts">
-import type { CampaignDetail, CampaignStats } from '~/types/campaign'
+import type {
+  CampaignActivityRow,
+  CampaignDetail,
+  CampaignLink,
+  CampaignStats,
+  CampaignTimeseries,
+} from '~/types/campaign'
 import CampaignStatusBadge from '~/components/campaigns/CampaignStatusBadge.vue'
 import ConfirmDeleteModal from '~/components/ConfirmDeleteModal.vue'
+import EngagementLineChart from '~/components/dashboard/EngagementLineChart.client.vue'
 
 const route = useRoute()
 const id = route.params.id as string
@@ -11,23 +18,33 @@ const userInitials = computed(() =>
   (user.value?.email ?? 'U').slice(0, 2).toUpperCase(),
 )
 
-const {
-  data: campaign,
-  error: campaignError,
-  refresh: refreshCampaign,
-} = await useFetch<CampaignDetail>(`/api/campaigns/${id}`)
-
-const {
-  data: stats,
-  pending: statsPending,
-  refresh: refreshStats,
-} = await useFetch<CampaignStats>(`/api/campaigns/${id}/stats`)
+const { data: campaign, error: campaignError, refresh: refreshCampaign } =
+  await useFetch<CampaignDetail>(`/api/campaigns/${id}`)
+const { data: stats } = await useFetch<CampaignStats>(
+  `/api/campaigns/${id}/stats`,
+)
+const { data: series } = await useFetch<CampaignTimeseries>(
+  `/api/campaigns/${id}/timeseries`,
+  { default: () => ({ points: [] }) },
+)
+const { data: linksRes } = await useFetch<{ links: CampaignLink[] }>(
+  `/api/campaigns/${id}/links`,
+  { default: () => ({ links: [] }) },
+)
+const activityPage = ref(1)
+const { data: activityRes } = await useFetch(`/api/campaigns/${id}/activity`, {
+  query: { page: activityPage, limit: 8 },
+  default: () => ({
+    data: [] as CampaignActivityRow[],
+    total: 0,
+    page: 1,
+    limit: 8,
+  }),
+})
 
 useHead({
   title: computed(() =>
-    campaign.value
-      ? `${campaign.value.name} — Sendinal`
-      : 'Campaign — Sendinal',
+    campaign.value ? `${campaign.value.name} — Sendinal` : 'Campaign — Sendinal',
   ),
 })
 
@@ -37,18 +54,7 @@ const canEdit = computed(
     campaign.value?.status === 'draft' ||
     campaign.value?.status === 'scheduled',
 )
-
 const isScheduled = computed(() => campaign.value?.status === 'scheduled')
-
-const refreshing = ref(false)
-async function refreshAll() {
-  refreshing.value = true
-  try {
-    await Promise.all([refreshCampaign(), refreshStats()])
-  } finally {
-    refreshing.value = false
-  }
-}
 
 /* ---------- cancel a scheduled send ---------- */
 const showCancel = ref(false)
@@ -68,109 +74,128 @@ async function confirmCancel() {
 }
 
 /* ---------- formatting ---------- */
-function fmtNum(n: number) {
-  return n.toLocaleString('en-US')
-}
+const compactFmt = new Intl.NumberFormat('en-US', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+})
+const compact = (n: number) =>
+  compactFmt.format(n).replace('K', 'k').replace('M', 'm')
+const fmtNum = (n: number) => n.toLocaleString('en-US')
+const fmtPct = (v: number | null) => (v == null ? '—' : `${v.toFixed(1)}%`)
 function fmtDateTime(iso: string | null) {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('en-US', {
     month: 'short',
-    day: '2-digit',
+    day: 'numeric',
     year: 'numeric',
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
   })
 }
-function pct(v: number | null) {
-  return v === null ? '—' : `${v.toFixed(1)}%`
+function fmtShort(iso: string | null) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  })
+}
+function fmtActivityTime(iso: string | null) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 }
 
-/* ---------- summary cards ---------- */
-interface Card {
-  key: string
-  label: string
-  value: number
-  sub: string | null
-  icon: string
-  tone: 'neutral' | 'success' | 'warning' | 'danger'
-}
-const cards = computed<Card[]>(() => {
+/* ---------- stat cards ---------- */
+const cards = computed(() => {
   const s = stats.value
-  if (!s) return []
   return [
-    {
-      key: 'recipients',
-      label: 'Recipients',
-      value: s.recipients,
-      sub: s.counts.queued ? `${fmtNum(s.counts.queued)} queued` : null,
-      icon: 'ph-users',
-      tone: 'neutral',
-    },
     {
       key: 'delivered',
       label: 'Delivered',
-      value: s.counts.sent,
-      sub: pct(s.rates.delivered),
-      icon: 'ph-check-circle',
-      tone: 'success',
+      value: s ? compact(s.counts.sent) : '—',
+      icon: 'ph-paper-plane-tilt',
+      pill: s ? fmtPct(s.rates.delivered) : '—',
+      tone: 'good',
     },
     {
-      key: 'bounced',
-      label: 'Bounced',
-      value: s.counts.bounced,
-      sub: pct(s.rates.bounce),
-      icon: 'ph-arrow-u-down-left',
-      tone: 'warning',
+      key: 'open',
+      label: 'Open rate',
+      value: s ? fmtPct(s.rates.open) : '—',
+      icon: 'ph-envelope-open',
+      pill: s ? `${compact(s.counts.opened)} opens` : '—',
+      tone: 'teal',
     },
     {
-      key: 'complained',
-      label: 'Complained',
-      value: s.counts.complained,
-      sub: pct(s.rates.complaint),
-      icon: 'ph-flag',
-      tone: 'danger',
+      key: 'click',
+      label: 'Click rate',
+      value: s ? fmtPct(s.rates.click) : '—',
+      icon: 'ph-cursor-click',
+      pill: s ? `${compact(s.counts.clicked)} clicks` : '—',
+      tone: 'teal',
     },
     {
-      key: 'failed',
-      label: 'Failed',
-      value: s.counts.failed,
-      sub: pct(s.rates.failed),
-      icon: 'ph-warning-circle',
-      tone: 'danger',
+      key: 'unsub',
+      label: 'Unsubscribed',
+      value: s ? compact(s.counts.unsubscribed) : '—',
+      icon: 'ph-user-minus',
+      pill: s ? fmtPct(s.rates.unsubscribe) : '—',
+      tone: 'muted',
     },
   ]
 })
 
-/* ---------- delivery breakdown bar ---------- */
-const SEGMENTS = [
-  { key: 'sent', label: 'Delivered', color: 'var(--success-600)' },
-  { key: 'bounced', label: 'Bounced', color: 'var(--warning-600)' },
-  { key: 'complained', label: 'Complained', color: 'var(--danger-600)' },
-  { key: 'failed', label: 'Failed', color: '#9a4040' },
-  { key: 'queued', label: 'Queued', color: 'var(--gray-300)' },
-] as const
+/* ---------- chart ---------- */
+const chartLabels = computed(
+  () => series.value?.points.map((p) => fmtShort(p.date)) ?? [],
+)
+const chartOpens = computed(
+  () => series.value?.points.map((p) => p.opens) ?? [],
+)
+const chartClicks = computed(
+  () => series.value?.points.map((p) => p.clicks) ?? [],
+)
+const hasEngagement = computed(
+  () =>
+    chartOpens.value.some((n) => n > 0) || chartClicks.value.some((n) => n > 0),
+)
 
-const breakdown = computed(() => {
-  const s = stats.value
-  if (!s || s.recipients === 0) return []
-  return SEGMENTS.map((seg) => {
-    const count = s.counts[seg.key]
-    return {
-      ...seg,
-      count,
-      width: (count / s.recipients) * 100,
-    }
-  }).filter((seg) => seg.count > 0)
-})
+const topLinks = computed(() => linksRes.value?.links ?? [])
+const activity = computed(
+  () => (activityRes.value?.data ?? []) as CampaignActivityRow[],
+)
+const activityTotal = computed(() => activityRes.value?.total ?? 0)
+const activityLimit = computed(() => activityRes.value?.limit ?? 8)
+const activityPages = computed(() =>
+  Math.max(1, Math.ceil(activityTotal.value / activityLimit.value)),
+)
+
+/* ---------- activity status badges ---------- */
+const ACT: Record<string, { label: string; bg: string; fg: string; bd: string }> =
+  {
+    clicked: { label: 'Clicked', bg: '#c8ebe4', fg: '#0f5247', bd: '#94d5c8' },
+    opened: { label: 'Opened', bg: '#dcf3e8', fg: '#1a7a46', bd: '#7dd3aa' },
+    delivered: { label: 'Delivered', bg: '#f0eeeb', fg: '#534d46', bd: '#e2ded9' },
+    unsubscribed: { label: 'Unsubscribed', bg: '#f0eeeb', fg: '#787068', bd: '#e2ded9' },
+    bounced: { label: 'Bounced', bg: '#fdf0e8', fg: '#984a14', bd: '#f5c4a0' },
+    complained: { label: 'Complained', bg: '#fde8e8', fg: '#c0272d', bd: '#f5a3a3' },
+    failed: { label: 'Failed', bg: '#fde8e8', fg: '#c0272d', bd: '#f5a3a3' },
+    queued: { label: 'Queued', bg: '#e3f0fd', fg: '#1a5fa8', bd: '#93c4f7' },
+  }
+const actMeta = (s: string) => ACT[s] ?? ACT.delivered!
 </script>
 
 <template>
   <div class="page">
-    <!-- top utility bar -->
+    <!-- top bar -->
     <div class="topbar">
-      <NuxtLink to="/campaigns" class="back">
-        <i class="ph ph-arrow-left" /> Campaigns
-      </NuxtLink>
+      <div class="search">
+        <i class="ph ph-magnifying-glass search__icon" />
+        <input class="search__input" placeholder="Search campaigns, contacts…" />
+      </div>
       <div class="topbar__right">
         <div class="avatar-me">{{ userInitials }}</div>
       </div>
@@ -184,9 +209,7 @@ const breakdown = computed(() => {
           <div class="empty__title">Campaign not found</div>
           <div class="empty__desc">
             This campaign may have been deleted.
-            <NuxtLink to="/campaigns" class="empty__link"
-              >Back to campaigns</NuxtLink
-            >.
+            <NuxtLink to="/campaigns" class="empty__link">Back to campaigns</NuxtLink>.
           </div>
         </div>
 
@@ -194,14 +217,19 @@ const breakdown = computed(() => {
           <!-- header -->
           <div class="header">
             <div class="header__main">
-              <div class="header__titlerow">
-                <h1 class="header__title">{{ campaign.name }}</h1>
-                <CampaignStatusBadge :status="campaign.status" />
+              <div class="crumb">
+                <NuxtLink to="/campaigns" class="crumb__link">Campaigns</NuxtLink>
+                <i class="ph ph-caret-right" />
+                <span class="crumb__cur">{{ campaign.name }}</span>
               </div>
-              <div class="header__subject">{{ campaign.subject }}</div>
-              <div class="header__meta">
-                <span class="meta-item">
-                  <i class="ph ph-paper-plane-tilt" />
+              <h1 class="header__title">{{ campaign.name }}</h1>
+              <div class="meta">
+                <span class="meta__item">
+                  <CampaignStatusBadge :status="campaign.status" />
+                </span>
+                <span class="meta__sep" />
+                <span class="meta__item">
+                  <i class="ph ph-clock" />
                   {{
                     campaign.sent_at
                       ? fmtDateTime(campaign.sent_at)
@@ -210,13 +238,15 @@ const breakdown = computed(() => {
                         : 'Not sent yet'
                   }}
                 </span>
-                <span class="meta-item">
+                <span class="meta__sep" />
+                <span class="meta__item">
+                  <i class="ph ph-users" /> {{ fmtNum(stats?.recipients ?? 0) }}
+                  recipients
+                </span>
+                <span class="meta__sep" />
+                <span class="meta__item">
                   <i class="ph ph-list-bullets" />
                   {{ campaign.listName ?? 'No list' }}
-                </span>
-                <span class="meta-item">
-                  <i class="ph ph-envelope-simple" />
-                  {{ campaign.from_name }} &lt;{{ campaign.from_email }}&gt;
                 </span>
               </div>
             </div>
@@ -224,7 +254,7 @@ const breakdown = computed(() => {
               <button
                 v-if="isScheduled"
                 type="button"
-                class="cancel-btn"
+                class="btn-ghost-danger"
                 @click="showCancel = true"
               >
                 <i class="ph ph-x-circle" /> Cancel
@@ -232,75 +262,147 @@ const breakdown = computed(() => {
               <NuxtLink
                 v-if="canEdit"
                 :to="`/campaigns/${id}/edit`"
-                class="edit-btn"
+                class="btn-secondary"
               >
                 <i class="ph ph-pencil-simple" /> Edit
               </NuxtLink>
               <button
                 type="button"
-                class="refresh-btn"
-                :disabled="refreshing"
-                @click="refreshAll"
+                class="btn-secondary"
+                title="Export is coming in a later release (4.4)"
+                disabled
               >
-                <i
-                  class="ph ph-arrows-clockwise"
-                  :class="{ 'refresh-btn__spin': refreshing }"
-                />
-                Refresh
+                <i class="ph ph-arrow-square-out" /> Export
               </button>
             </div>
           </div>
 
-          <!-- summary cards -->
-          <div class="cards" :class="{ 'cards--loading': statsPending }">
-            <div
-              v-for="card in cards"
-              :key="card.key"
-              class="card"
-              :class="`card--${card.tone}`"
-            >
-              <div class="card__top">
-                <span class="card__label">{{ card.label }}</span>
-                <i class="ph card__icon" :class="card.icon" />
+          <!-- cards + chart -->
+          <div class="grid">
+            <div class="statcol">
+              <div v-for="c in cards" :key="c.key" class="statcard">
+                <div class="statcard__top">
+                  <span class="statcard__label">{{ c.label }}</span>
+                  <span class="statcard__icon" :class="`icon--${c.tone}`">
+                    <i class="ph" :class="c.icon" />
+                  </span>
+                </div>
+                <div class="statcard__row">
+                  <span class="statcard__value">{{ c.value }}</span>
+                  <span class="statcard__pill" :class="`pill--${c.tone}`">{{
+                    c.pill
+                  }}</span>
+                </div>
               </div>
-              <div class="card__value">{{ fmtNum(card.value) }}</div>
-              <div v-if="card.sub" class="card__sub">{{ card.sub }}</div>
+            </div>
+
+            <div class="panel chartcard">
+              <div class="panel__head">
+                <h3 class="panel__title">Engagement over time</h3>
+                <div class="chart-legend">
+                  <span class="cl"
+                    ><span class="cl__line cl__line--open" />Opens</span
+                  >
+                  <span class="cl"
+                    ><span class="cl__line cl__line--click" />Clicks</span
+                  >
+                </div>
+              </div>
+              <div class="chartbody">
+                <ClientOnly>
+                  <EngagementLineChart
+                    v-if="hasEngagement"
+                    :labels="chartLabels"
+                    :opens="chartOpens"
+                    :clicks="chartClicks"
+                  />
+                  <template #fallback><div class="chart-ph" /></template>
+                </ClientOnly>
+                <div v-if="!hasEngagement" class="chart-empty">
+                  No engagement recorded yet.
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- delivery breakdown -->
-          <div class="panel">
-            <div class="panel__head">
-              <h2 class="panel__title">Delivery breakdown</h2>
-              <span class="panel__total"
-                >{{ fmtNum(stats?.recipients ?? 0) }} total</span
+          <!-- top clicked links -->
+          <div class="panel tablepanel">
+            <div class="panel__padhead">
+              <h3 class="panel__title">Top clicked links</h3>
+            </div>
+            <div class="lrow lhead">
+              <span>URL</span>
+              <span class="r">Total clicks</span>
+              <span class="r">Unique clicks</span>
+            </div>
+            <div v-for="l in topLinks" :key="l.url" class="lrow">
+              <span class="lurl">
+                <i class="ph ph-link-simple" />
+                <a :href="l.url" target="_blank" rel="noopener" class="lurl__a">{{
+                  l.url
+                }}</a>
+              </span>
+              <span class="r lstrong">{{ fmtNum(l.total) }}</span>
+              <span class="r lmuted">{{ fmtNum(l.unique) }}</span>
+            </div>
+            <div v-if="!topLinks.length" class="tableempty">
+              No link clicks recorded yet.
+            </div>
+          </div>
+
+          <!-- individual send results -->
+          <div class="panel tablepanel">
+            <div class="panel__padhead">
+              <h3 class="panel__title">Individual send results</h3>
+              <span class="panel__meta"
+                >{{ fmtNum(activityTotal) }} recipients</span
               >
             </div>
-
-            <template v-if="breakdown.length">
-              <div class="bar">
-                <div
-                  v-for="seg in breakdown"
-                  :key="seg.key"
-                  class="bar__seg"
-                  :style="{ width: seg.width + '%', background: seg.color }"
-                  :title="`${seg.label}: ${fmtNum(seg.count)}`"
-                />
+            <div class="arow ahead">
+              <span>Recipient</span>
+              <span>Status</span>
+              <span class="r">Date / time</span>
+            </div>
+            <div v-for="a in activity" :key="a.sendId" class="arow">
+              <span class="aemail">{{ a.email }}</span>
+              <span>
+                <span
+                  class="abadge"
+                  :style="{
+                    background: actMeta(a.status).bg,
+                    color: actMeta(a.status).fg,
+                    border: `1px solid ${actMeta(a.status).bd}`,
+                  }"
+                  >{{ actMeta(a.status).label }}</span
+                >
+              </span>
+              <span class="r atime">{{ fmtActivityTime(a.at) }}</span>
+            </div>
+            <div v-if="!activity.length" class="tableempty">
+              No recipients yet.
+            </div>
+            <div v-if="activityTotal > activityLimit" class="apager">
+              <span class="apager__label"
+                >Page {{ activityPage }} of {{ activityPages }}</span
+              >
+              <div class="apager__nav">
+                <button
+                  type="button"
+                  class="pager"
+                  :disabled="activityPage <= 1"
+                  @click="activityPage--"
+                >
+                  <i class="ph ph-caret-left" /> Prev
+                </button>
+                <button
+                  type="button"
+                  class="pager"
+                  :disabled="activityPage >= activityPages"
+                  @click="activityPage++"
+                >
+                  Next <i class="ph ph-caret-right" />
+                </button>
               </div>
-              <div class="legend">
-                <div v-for="seg in breakdown" :key="seg.key" class="legend__it">
-                  <span
-                    class="legend__dot"
-                    :style="{ background: seg.color }"
-                  />
-                  <span class="legend__label">{{ seg.label }}</span>
-                  <span class="legend__count">{{ fmtNum(seg.count) }}</span>
-                </div>
-              </div>
-            </template>
-
-            <div v-else class="panel__empty">
-              No recipients yet — this campaign hasn’t been dispatched.
             </div>
           </div>
         </template>
@@ -324,7 +426,7 @@ const breakdown = computed(() => {
   display: contents;
 }
 
-/* top utility bar */
+/* top bar */
 .topbar {
   height: 64px;
   flex: none;
@@ -335,26 +437,34 @@ const breakdown = computed(() => {
   border-bottom: 1px solid var(--gray-200);
   background: var(--gray-50);
 }
-.back {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 12px;
-  border-radius: var(--radius-md);
-  color: var(--gray-600);
+.search {
+  position: relative;
+  width: 420px;
+  max-width: 42vw;
+}
+.search__icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
+  color: var(--gray-400);
+}
+.search__input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px 0 36px;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  background: #fff;
   font-family: var(--font-body);
   font-size: 14px;
-  font-weight: 500;
-  text-decoration: none;
-  transition: background-color 100ms ease;
-}
-.back:hover {
-  background: var(--gray-100);
   color: var(--gray-800);
+  outline: none;
 }
-.back .ph {
-  font-size: 16px;
+.search__input:focus {
+  border-color: var(--primary-600);
+  outline: 2px solid var(--primary-100);
 }
 .topbar__right {
   margin-left: auto;
@@ -363,7 +473,7 @@ const breakdown = computed(() => {
   width: 34px;
   height: 34px;
   border-radius: var(--radius-full);
-  background: var(--primary-600);
+  background: linear-gradient(135deg, var(--primary-400), var(--primary-800));
   color: #fff;
   display: flex;
   align-items: center;
@@ -377,11 +487,11 @@ const breakdown = computed(() => {
 .scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 28px;
 }
 .content {
-  max-width: 1100px;
+  max-width: 1240px;
   margin: 0 auto;
+  padding: 28px 32px 64px;
 }
 
 /* header */
@@ -390,258 +500,414 @@ const breakdown = computed(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
-.header__titlerow {
+.crumb {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--gray-500);
   margin-bottom: 8px;
 }
+.crumb__link {
+  color: var(--gray-500);
+  text-decoration: none;
+}
+.crumb__link:hover {
+  color: var(--primary-600);
+}
+.crumb .ph {
+  font-size: 11px;
+  color: var(--gray-300);
+}
+.crumb__cur {
+  color: var(--gray-700);
+}
 .header__title {
-  margin: 0;
+  margin: 0 0 10px;
   font-family: var(--font-display);
   font-weight: 500;
-  font-size: 26px;
-  line-height: 1.2;
+  font-size: 28px;
   color: var(--gray-800);
 }
-.header__subject {
-  font-size: 15px;
-  color: var(--gray-600);
-  margin-bottom: 14px;
-}
-.header__meta {
+.meta {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 8px 20px;
+  gap: 14px;
+  font-size: 13.5px;
+  color: var(--gray-500);
 }
-.meta-item {
+.meta__item {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  color: var(--gray-500);
 }
-.meta-item .ph {
+.meta__item .ph {
   font-size: 15px;
   color: var(--gray-400);
+}
+.meta__sep {
+  width: 1px;
+  height: 14px;
+  background: var(--gray-200);
 }
 .header__actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex: none;
 }
-.cancel-btn {
+.btn-secondary {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 36px;
+  height: 38px;
   padding: 0 14px;
-  border: 1px solid var(--danger-100);
-  border-radius: var(--radius-md);
-  background: #fff;
-  color: var(--danger-600);
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background-color 100ms ease,
-    border-color 100ms ease;
-}
-.cancel-btn:hover {
-  background: var(--danger-100);
-  border-color: var(--danger-600);
-}
-.cancel-btn .ph {
-  font-size: 15px;
-}
-.edit-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 16px;
-  border-radius: var(--radius-md);
-  background: var(--primary-600);
-  color: #fff;
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 500;
-  text-decoration: none;
-  transition: background-color 100ms ease;
-}
-.edit-btn:hover {
-  background: var(--primary-800);
-}
-.edit-btn .ph {
-  font-size: 15px;
-}
-.refresh-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 14px;
-  flex: none;
   border: 1px solid var(--gray-200);
-  border-radius: var(--radius-md);
+  border-radius: 8px;
   background: #fff;
   color: var(--gray-700);
   font-family: var(--font-body);
   font-size: 14px;
   font-weight: 500;
+  text-decoration: none;
   cursor: pointer;
 }
-.refresh-btn:hover:not(:disabled) {
+.btn-secondary:hover:not(:disabled) {
   background: var(--gray-100);
 }
-.refresh-btn:disabled {
+.btn-secondary:disabled {
   color: var(--gray-400);
   cursor: not-allowed;
 }
-.refresh-btn .ph {
-  font-size: 15px;
+.btn-secondary .ph {
+  font-size: 16px;
 }
-.refresh-btn__spin {
-  animation: spin 0.8s linear infinite;
+.btn-ghost-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--danger-100);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--danger-600);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
 }
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.btn-ghost-danger:hover {
+  background: var(--danger-100);
+  border-color: var(--danger-600);
+}
+.btn-ghost-danger .ph {
+  font-size: 16px;
 }
 
-/* summary cards */
-.cards {
+/* cards + chart grid */
+.grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 14px;
-  margin-bottom: 24px;
-  transition: opacity 120ms ease;
+  grid-template-columns: minmax(280px, 320px) 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
 }
-.cards--loading {
-  opacity: 0.6;
+.statcol {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
-.card {
+.statcard {
   background: #fff;
   border: 1px solid var(--gray-200);
-  border-radius: var(--radius-lg);
-  padding: 16px;
+  border-radius: 10px;
+  padding: 18px 20px;
 }
-.card__top {
+.statcard__top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 12px;
 }
-.card__label {
-  font-size: 12px;
+.statcard__label {
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--gray-500);
 }
-.card__icon {
-  font-size: 17px;
-  color: var(--gray-300);
+.statcard__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.card__value {
+.statcard__icon .ph {
+  font-size: 17px;
+}
+.icon--good,
+.icon--teal {
+  background: var(--primary-50);
+  color: var(--primary-600);
+}
+.icon--muted {
+  background: var(--gray-100);
+  color: var(--gray-500);
+}
+.statcard__row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 12px;
+}
+.statcard__value {
   font-family: var(--font-display);
   font-weight: 500;
-  font-size: 28px;
+  font-size: 30px;
   line-height: 1;
-  color: var(--gray-800);
+  color: var(--gray-900);
   font-variant-numeric: tabular-nums;
 }
-.card__sub {
-  margin-top: 6px;
+.statcard__pill {
   font-size: 12px;
-  color: var(--gray-500);
-  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
 }
-.card--success .card__icon {
+.pill--good {
   color: var(--success-600);
+  background: var(--success-100);
 }
-.card--warning .card__icon {
-  color: var(--warning-600);
+.pill--teal {
+  color: var(--primary-800);
+  background: var(--primary-100);
 }
-.card--danger .card__icon {
-  color: var(--danger-600);
+.pill--muted {
+  color: var(--gray-500);
+  background: var(--gray-100);
 }
 
-/* delivery breakdown panel */
+/* panels */
 .panel {
   background: #fff;
   border: 1px solid var(--gray-200);
-  border-radius: var(--radius-lg);
-  padding: 20px;
+  border-radius: 10px;
+}
+.chartcard {
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
 }
 .panel__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
+  margin-bottom: 8px;
 }
 .panel__title {
   margin: 0;
   font-family: var(--font-display);
   font-weight: 500;
-  font-size: 16px;
+  font-size: 18px;
   color: var(--gray-800);
 }
-.panel__total {
-  font-size: 13px;
-  color: var(--gray-500);
-  font-variant-numeric: tabular-nums;
-}
-.bar {
+.chart-legend {
   display: flex;
-  height: 14px;
-  border-radius: var(--radius-full);
-  overflow: hidden;
-  background: var(--gray-100);
-}
-.bar__seg {
-  height: 100%;
-  min-width: 2px;
-}
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 24px;
-  margin-top: 18px;
-}
-.legend__it {
-  display: inline-flex;
   align-items: center;
-  gap: 8px;
-}
-.legend__dot {
-  width: 9px;
-  height: 9px;
-  border-radius: var(--radius-full);
-  flex: none;
-}
-.legend__label {
+  gap: 18px;
   font-size: 13px;
   color: var(--gray-600);
 }
-.legend__count {
+.cl {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.cl__line {
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+.cl__line--open {
+  background: #0f5247;
+}
+.cl__line--click {
+  background: var(--primary-200);
+}
+.chartbody {
+  flex: 1;
+  min-height: 320px;
+  position: relative;
+  display: flex;
+}
+.chart-ph {
+  flex: 1;
+  min-height: 320px;
+}
+.chart-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13.5px;
+  color: var(--gray-400);
+}
+
+/* tables */
+.tablepanel {
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.panel__padhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px 14px;
+}
+.panel__meta {
   font-size: 13px;
+  color: var(--gray-500);
+}
+.lrow,
+.arow {
+  display: grid;
+  align-items: center;
+  padding: 0 22px;
+}
+.lrow {
+  grid-template-columns: 1fr 150px 150px;
+  height: 50px;
+  border-bottom: 1px solid var(--gray-100);
+  font-size: 13.5px;
+}
+.arow {
+  grid-template-columns: 1fr 140px 160px;
+  height: 50px;
+  border-bottom: 1px solid var(--gray-100);
+  font-size: 13.5px;
+}
+.lhead,
+.ahead {
+  height: 38px;
+  background: var(--gray-50);
+  border-top: 1px solid var(--gray-200);
+  border-bottom: 1px solid var(--gray-200);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--gray-500);
+}
+.r {
+  text-align: right;
+}
+.lurl {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.lurl .ph {
+  font-size: 15px;
+  color: var(--gray-400);
+  flex: none;
+}
+.lurl__a {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--primary-600);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lurl__a:hover {
+  text-decoration: underline;
+}
+.lstrong {
   font-weight: 500;
   color: var(--gray-800);
   font-variant-numeric: tabular-nums;
 }
-.panel__empty {
+.lmuted {
+  color: var(--gray-600);
+  font-variant-numeric: tabular-nums;
+}
+.aemail {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--gray-700);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 12px;
+}
+.abadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.atime {
+  color: var(--gray-500);
+  font-size: 13px;
+}
+.tableempty {
+  padding: 40px 22px;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--gray-500);
+}
+.apager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+}
+.apager__label {
   font-size: 13px;
   color: var(--gray-500);
-  padding: 8px 0;
+}
+.apager__nav {
+  display: flex;
+  gap: 6px;
+}
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--gray-700);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.pager:hover:not(:disabled) {
+  background: var(--gray-100);
+}
+.pager:disabled {
+  color: var(--gray-400);
+  cursor: not-allowed;
+}
+.pager .ph {
+  font-size: 13px;
 }
 
-/* not-found / empty */
+/* not found */
 .empty {
   padding: 80px 32px;
   text-align: center;
@@ -670,22 +936,16 @@ const breakdown = computed(() => {
 .empty__desc {
   font-size: 13px;
   color: var(--gray-500);
-  max-width: 360px;
-  margin: 0 auto;
-  line-height: 1.6;
 }
 .empty__link {
   color: var(--primary-600);
   text-decoration: none;
   font-weight: 500;
 }
-.empty__link:hover {
-  text-decoration: underline;
-}
 
-@media (max-width: 880px) {
-  .cards {
-    grid-template-columns: repeat(2, 1fr);
+@media (max-width: 920px) {
+  .grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

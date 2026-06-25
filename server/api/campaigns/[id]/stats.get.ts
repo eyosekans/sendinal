@@ -54,25 +54,29 @@ export default defineEventHandler(async (event) => {
   for (const s of sends) counts[s.status]++
   const recipients = sends.length
 
-  // Unique opens/clicks: dedupe email_events back to distinct send ids.
+  // Unique opens/clicks/unsubscribes: dedupe email_events back to distinct sends.
   const openedSends = new Set<string>()
   const clickedSends = new Set<string>()
+  const unsubscribedSends = new Set<string>()
   const sendIds = sends.map((s) => s.id)
   if (sendIds.length) {
     const { data: events, error: eErr } = await supabase
       .from('email_events')
       .select('send_id, type')
       .in('send_id', sendIds)
-      .in('type', ['opened', 'clicked'])
+      .in('type', ['opened', 'clicked', 'unsubscribed'])
     if (eErr) {
       throw createError({ statusCode: 500, statusMessage: eErr.message })
     }
     for (const e of events ?? []) {
-      ;(e.type === 'opened' ? openedSends : clickedSends).add(e.send_id)
+      if (e.type === 'opened') openedSends.add(e.send_id)
+      else if (e.type === 'clicked') clickedSends.add(e.send_id)
+      else unsubscribedSends.add(e.send_id)
     }
   }
   const opened = openedSends.size
   const clicked = clickedSends.size
+  const unsubscribed = unsubscribedSends.size
 
   const pct = (n: number) =>
     recipients ? Number(((n / recipients) * 100).toFixed(1)) : null
@@ -80,11 +84,12 @@ export default defineEventHandler(async (event) => {
   return {
     campaignId: id,
     recipients,
-    counts: { ...counts, opened, clicked },
+    counts: { ...counts, opened, clicked, unsubscribed },
     rates: {
       delivered: pct(counts.sent),
       open: pct(opened),
       click: pct(clicked),
+      unsubscribe: pct(unsubscribed),
       bounce: pct(counts.bounced),
       complaint: pct(counts.complained),
       failed: pct(counts.failed),
