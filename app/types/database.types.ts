@@ -34,7 +34,7 @@ export type EmailEventType =
   | 'bounced'
   | 'complained'
   | 'unsubscribed'
-export type TrackingTokenType = 'open' | 'click'
+export type TrackingTokenType = 'open' | 'click' | 'unsubscribe'
 
 export interface Database {
   public: {

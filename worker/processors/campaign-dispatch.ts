@@ -8,6 +8,12 @@ import type { EmailSendJob } from '../../shared/schemas/jobs.ts'
 import { connection } from '../queues/connection.ts'
 import { supabase } from '../lib/supabase.ts'
 import { finalizeCampaignIfComplete } from '../lib/sends.ts'
+import {
+  generateToken,
+  injectOpenPixel,
+  injectUnsubscribe,
+  rewriteClickLinks,
+} from '../lib/tracking.ts'
 
 const MAX_ATTEMPTS = 3
 
@@ -16,8 +22,9 @@ const MAX_ATTEMPTS = 3
  * active and not deleted), creates one `sends` row per recipient, and enqueues
  * an `email.send` job for each.
  *
- * Tracking-token injection (open pixel, click rewrite, unsubscribe) is Phase
- * 2.3–2.5; this sends the campaign HTML as-is.
+ * Per-send tracking: click links are rewritten to `/t/c/{token}` (2.4) and a
+ * 1×1 open pixel `/t/o/{token}` is injected (2.3), with every token stored in
+ * `tracking_tokens`. Unsubscribe (2.5) will extend this same injection.
  */
 export async function processCampaignDispatch(job: Job) {
   const { campaignId } = campaignDispatchJobSchema.parse(job.data)
@@ -75,16 +82,65 @@ export async function processCampaignDispatch(job: Job) {
   if (insErr) throw insErr
 
   const emailByContact = new Map(contacts.map((c) => [c.id, c.email]))
+  const sends = inserted ?? []
+
+  // Tracking: per send, rewrite click links and inject an open pixel into a
+  // personalised copy of the HTML, collecting every token to store. Needs a
+  // public APP_URL for absolute links; without it we send plain HTML.
+  const appUrl = (process.env.NUXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  const htmlBySend = new Map<string, string>()
+  type TokenRow = {
+    token: string
+    send_id: string
+    type: 'open' | 'click' | 'unsubscribe'
+    url?: string
+  }
+  const tokenRows: TokenRow[] = []
+  if (appUrl) {
+    for (const s of sends) {
+      // 2.4 — rewrite every http(s) <a href> to a tracked redirect.
+      const { html: clicked, links } = rewriteClickLinks(
+        campaign.html,
+        appUrl,
+        generateToken,
+      )
+      for (const l of links)
+        tokenRows.push({
+          token: l.token,
+          send_id: s.id,
+          type: 'click',
+          url: l.url,
+        })
+      // 2.5 — unsubscribe link (after click rewrite so it isn't /t/c-wrapped).
+      const unsubToken = generateToken()
+      tokenRows.push({ token: unsubToken, send_id: s.id, type: 'unsubscribe' })
+      const withUnsub = injectUnsubscribe(clicked, `${appUrl}/t/u/${unsubToken}`)
+      // 2.3 — inject the open pixel last.
+      const openToken = generateToken()
+      tokenRows.push({ token: openToken, send_id: s.id, type: 'open' })
+      htmlBySend.set(s.id, injectOpenPixel(withUnsub, `${appUrl}/t/o/${openToken}`))
+    }
+    if (tokenRows.length) {
+      const { error: tErr } = await supabase
+        .from('tracking_tokens')
+        .insert(tokenRows)
+      if (tErr) throw tErr
+    }
+  } else {
+    console.warn('[campaign.dispatch] NUXT_PUBLIC_APP_URL unset — no tracking')
+  }
+
   const emailQueue = new Queue(QUEUE_NAMES.emailSend, { connection })
   try {
-    const jobs = (inserted ?? []).map((s) => {
+    const jobs = sends.map((s) => {
+      const html = htmlBySend.get(s.id) ?? campaign.html
       const data: EmailSendJob = {
         sendId: s.id,
         campaignId,
         contactId: s.contact_id,
         to: emailByContact.get(s.contact_id)!,
         subject: campaign.subject,
-        html: campaign.html,
+        html,
         fromName: campaign.from_name,
         fromEmail: campaign.from_email,
       }

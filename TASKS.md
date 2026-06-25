@@ -461,25 +461,89 @@ Goal: full campaign builder with drag-and-drop editor, scheduling, open/click tr
 >   the new plugin — killed it; scheduler then dispatched correctly.)
 
 ### 2.3 Open tracking
-- [ ] At dispatch time: generate a unique token per send, store in `tracking_tokens` (type = 'open')
-- [ ] Inject `<img src="{APP_URL}/t/o/{token}" width="1" height="1">` into campaign HTML before sending
-- [ ] `GET /t/o/:token` Nitro route:
+- [x] At dispatch time: generate a unique token per send, store in `tracking_tokens` (type = 'open')
+- [x] Inject `<img src="{APP_URL}/t/o/{token}" width="1" height="1">` into campaign HTML before sending
+- [x] `GET /t/o/:token` Nitro route:
   - Look up token → send_id
   - Insert `email_events` row (type = 'opened') — deduplicated (ignore if already opened in last 24 h)
   - Return a 1×1 transparent GIF (`image/gif`)
 
+> **2.3 notes (2026-06-25)**
+> - `worker/lib/tracking.ts` — `generateToken()` (16-char URL-safe, `randomBytes(12)`
+>   → base64url) + `injectOpenPixel(html, url)` (inserts a 1×1 `<img>` before
+>   `</body>`, or appends when there's no body tag).
+> - `worker/processors/campaign-dispatch.ts` now generates one `tracking_tokens`
+>   (type `open`) row per send and injects that send's pixel into a **personalised
+>   copy** of the campaign HTML carried by its `email.send` job. Gated on
+>   `NUXT_PUBLIC_APP_URL` (needs an absolute URL for the pixel); without it, plain
+>   HTML is sent and a warning is logged.
+> - `server/routes/t/o/[token].get.ts` — public (no auth; covered by the
+>   nuxt.config `/t/*` exclude). Resolves token → send, records an `opened`
+>   `email_events` row **deduped to once per 24h per send**, and always returns a
+>   43-byte transparent GIF (`image/gif`, no-store). Best-effort: any error still
+>   returns the pixel. Uses the service-role `supabaseAdmin` client.
+> - Verified: helper unit checks (token shape/uniqueness, injection placement);
+>   full e2e with real Redis + worker (forced `NUXT_SES_DRY_RUN` so the fake test
+>   addresses weren't actually emailed) — dispatch created an open token per send;
+>   `GET /t/o/:token` returned a GIF and recorded exactly one `opened` event, a
+>   second hit within 24h was deduped, and a bogus token still returned the pixel.
+>   app `typecheck` + worker `tsc` + `lint` clean.
+
 ### 2.4 Click tracking
-- [ ] At dispatch time: for every `<a href="...">` in the HTML, generate a token (type = 'click'), store original URL in `tracking_tokens`
-- [ ] Replace href with `{APP_URL}/t/c/{token}`
-- [ ] `GET /t/c/:token` Nitro route:
+- [x] At dispatch time: for every `<a href="...">` in the HTML, generate a token (type = 'click'), store original URL in `tracking_tokens`
+- [x] Replace href with `{APP_URL}/t/c/{token}`
+- [x] `GET /t/c/:token` Nitro route:
   - Look up token → send_id + destination URL
   - Insert `email_events` row (type = 'clicked')
   - `302` redirect to destination URL
 
+> **2.4 notes (2026-06-25)**
+> - `worker/lib/tracking.ts → rewriteClickLinks(html, originUrl, makeToken)` —
+>   rewrites every `<a href="http(s)://…">` to `{origin}/t/c/{token}`, returning
+>   the token→original-URL pairs. Only http/https are rewritten; `mailto:`/`tel:`/
+>   `#anchors`/merge tags are left as-is, and other anchor attributes are preserved.
+> - `campaign-dispatch.ts` now does click-rewrite **then** open-pixel per send,
+>   collecting open + click tokens into a single `tracking_tokens` bulk insert
+>   (click rows carry the original `url`).
+> - `server/routes/t/c/[token].get.ts` — public (no auth). Resolves token → send +
+>   destination, records a `clicked` `email_events` row (with `url`, **every
+>   click, no dedup**), then 302-redirects. Only redirects to a stored http(s)
+>   URL (guards open-redirect); unknown/invalid token → 404. Best-effort insert.
+> - Verified: helper unit (rewrites 2 http links, captures URLs, leaves
+>   mailto/anchor untouched, preserves `class`/`target`); full e2e with Redis +
+>   worker (dry-run) — dispatch created 2 click tokens + 1 open token, mailto
+>   skipped; `GET /t/c/:token` 302'd to the original URL and recorded a `clicked`
+>   event with the URL, a second click added a second event (no dedup), bogus
+>   token → 404. app `typecheck` + worker `tsc` + `lint` clean.
+
 ### 2.5 Unsubscribe flow
-- [ ] Inject unsubscribe link `{APP_URL}/t/u/{token}` into every campaign email footer
-- [ ] `GET /t/u/:token` route: update `contacts.status = 'unsubscribed'`, show confirmation page
-- [ ] Exclude unsubscribed/bounced/complained contacts from all future campaign dispatches
+- [x] Inject unsubscribe link `{APP_URL}/t/u/{token}` into every campaign email footer
+- [x] `GET /t/u/:token` route: update `contacts.status = 'unsubscribed'`, show confirmation page
+- [x] Exclude unsubscribed/bounced/complained contacts from all future campaign dispatches
+
+> **2.5 notes (2026-06-25)**
+> - Migration `20260625000001_tracking_tokens_add_unsubscribe.sql` — extends the
+>   `tracking_tokens.type` CHECK to `('open','click','unsubscribe')`. **Applied by
+>   the user via the Supabase SQL editor** (the connected MCP is read-only, so I
+>   couldn't run it). `TrackingTokenType` updated to match.
+> - `worker/lib/tracking.ts → injectUnsubscribe(html, url)` — replaces a
+>   `{{unsubscribe_url}}` placeholder if present, else appends a minimal compliant
+>   footer before `</body>`. Runs in dispatch **after** click-rewrite (so the link
+>   isn't /t/c-wrapped) and before the open pixel; one `unsubscribe` token per send.
+> - `server/routes/t/u/[token].get.ts` — public. Token → send → contact, sets
+>   `contacts.status='unsubscribed'` (idempotent — the `unsubscribed` event is
+>   recorded only on the first unsubscribe), renders a standalone branded
+>   confirmation page (success / "link not valid"). `text/html`, no-store.
+> - **Exclusion (item 3) was already satisfied**: `campaign-dispatch` resolves
+>   recipients with `status='active'` + `deleted_at IS NULL`, so unsubscribed /
+>   bounced / complained contacts are skipped. Verified by a second campaign to
+>   the same list producing 0 sends for the unsubscribed contact.
+> - Verified: helper unit (placeholder replace, footer append with/without body);
+>   full e2e with Redis + worker (dry-run) — dispatch created the unsubscribe
+>   token; `/t/u/:token` showed the confirmation page, set the contact
+>   unsubscribed and logged one event, a second visit didn't duplicate it, a new
+>   dispatch excluded the contact (0 sends), and a bogus token rendered the
+>   not-valid page. app `typecheck` + worker `tsc` + `lint` clean.
 
 ### 2.6 Analytics dashboard
 - [ ] `GET /api/campaigns/:id/stats` — extend to return open_count, click_count, open_rate, click_rate, bounce_rate
