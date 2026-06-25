@@ -94,12 +94,36 @@ Goal: a working platform that can send a plain-HTML email to a contact list and 
 
 ### 1.4 Amazon SES setup
 - [x] Install and configure `@aws-sdk/client-ses` in the worker
-- [ ] Verify sender domain in SES console (DKIM + SPF records)  _(manual — DNS)_
-- [ ] Request SES production access (exit sandbox)  _(manual — AWS approval)_
-- [ ] Create SNS topic for bounce/complaint notifications  _(CLI — see runbook)_
-- [ ] Create SQS queue; subscribe it to the SNS topic  _(CLI — see runbook)_
-- [ ] Configure SES to publish bounce + complaint events to the SNS topic  _(CLI — see runbook)_
+- [x] Verify sender domain in SES console (DKIM + SPF records)  _(domain `woomast.com` verified, Easy DKIM SUCCESS)_
+- [ ] Request SES production access (exit sandbox)  _(manual — AWS approval; still in sandbox: 200/day, 1/s)_
+- [x] Create SNS topic for bounce/complaint notifications  _(`sendinal-ses-events`)_
+- [x] Create SQS queue; subscribe it to the SNS topic  _(`sendinal-ses-events` queue + SNS→SQS sub)_
+- [x] Configure SES to publish bounce + complaint events to the SNS topic  _(identity notification topics; feedback forwarding off)_
 - [x] Write `worker/lib/ses.js` — wrapper around `SendEmail` with error handling _(as `worker/lib/ses.ts`, done in 1.7)_
+
+> **1.4 notes (AWS wiring done — 2026-06-25)**
+> - Region `eu-central-1`, AWS account `365642143560`, IAM user `sendinal-ses`
+>   (inline policy: ses send+setup, sns create/subscribe, sqs create/consume).
+>   AWS CLI v2 configured locally under profile `sendinal`.
+> - Identity `woomast.com`: VerificationStatus SUCCESS, Easy DKIM SUCCESS (RSA-2048,
+>   3 CNAMEs already live in Cloudflare). Custom MAIL FROM `mail.woomast.com`
+>   **status SUCCESS** (MX `10 feedback-smtp.eu-central-1.amazonses.com` + SPF TXT
+>   `v=spf1 include:amazonses.com ~all` live in Cloudflare; verified 2026-06-25).
+> - Bounce/complaint pipe: SNS topic
+>   `arn:aws:sns:eu-central-1:365642143560:sendinal-ses-events` ← SES Bounce +
+>   Complaint notifications; SQS queue
+>   `https://sqs.eu-central-1.amazonaws.com/365642143560/sendinal-ses-events`
+>   subscribed (RawMessageDelivery off, SNS envelope kept). Feedback email
+>   forwarding disabled. Verified end-to-end: SES simulator sends (success +
+>   bounce) delivered SNS notifications to the SQS queue.
+> - `.env` filled: `NUXT_AWS_REGION`, `NUXT_AWS_ACCESS_KEY_ID`,
+>   `NUXT_AWS_SECRET_ACCESS_KEY`, `NUXT_SES_FROM_EMAIL=info@woomast.com`,
+>   `NUXT_SES_FROM_NAME=Woomast`, `NUXT_SQS_QUEUE_URL`. Worker now sends live
+>   (no `NUXT_SES_DRY_RUN`).
+> - REMAINING (manual): SES production access request submitted 2026-06-25 —
+>   awaiting AWS approval to exit the sandbox (currently 200/day, 1/s).
+>   Bounce/complaint *consumption* (webhook + SQS poller) is task **1.8**; the
+>   queue currently holds the harmless simulator test messages for it to drain.
 
 > **1.4 notes**
 > - Code side is complete: `@aws-sdk/client-ses` installed + configured;
@@ -279,15 +303,73 @@ Goal: a working platform that can send a plain-HTML email to a contact list and 
 >   `build` clean.
 
 ### 1.8 Bounce & complaint handling
-- [ ] `POST /api/webhooks/ses` — verify SNS signature, parse SES notification
-- [ ] Update `sends.status` on bounce/complaint
-- [ ] Update `contacts.status` on bounce/complaint (prevent future sends)
-- [ ] Insert row in `email_events`
-- [ ] SQS polling plugin (`server/plugins/sqs-poller.ts`) as fallback to direct webhook
+- [x] `POST /api/webhooks/ses` — verify SNS signature, parse SES notification
+- [x] Update `sends.status` on bounce/complaint
+- [x] Update `contacts.status` on bounce/complaint (prevent future sends)
+- [x] Insert row in `email_events`
+- [x] SQS polling plugin (`server/plugins/sqs-poller.ts`) as fallback to direct webhook
+
+> **1.8 notes (2026-06-25)**
+> - Dependency: `@aws-sdk/client-sqs` pinned to `3.1074.0` (matches `client-ses`,
+>   so the shared AWS core deps aren't duplicated).
+> - Shared core: `server/utils/sesEvents.ts` — `processSnsEnvelope()` unwraps the
+>   SNS envelope (`Message` JSON string) and `processSesNotification()` keys off
+>   `mail.messageId` → `sends.ses_message_id` (1 SES send = 1 recipient), then
+>   updates `sends.status`, suppresses the `contacts.status`, and appends an
+>   `email_events` row (raw payload in `metadata`). **Idempotent** — re-delivery is
+>   a no-op once the send is already terminal.
+> - **Bounce policy**: only **Permanent** (hard) bounces suppress the contact;
+>   **Transient/Undetermined** (soft) bounces are acked without any DB change (a
+>   temporary failure must not permanently block a valid address). So an
+>   `email_events` row of type `bounced` always means a hard bounce. Complaints
+>   always suppress.
+> - Two delivery paths, both → `processSnsEnvelope`:
+>   - `server/plugins/sqs-poller.ts` — **primary** (our wiring is SES→SNS→SQS).
+>     Nitro plugin, long-polls (WaitTimeSeconds 20), deletes handled + unhandled
+>     (control/simulator) messages so the queue drains; a thrown DB error leaves
+>     the message for SQS redelivery. Trusts the queue access policy, so no SNS
+>     signature check. Auto-disables when AWS env/creds are absent (local dev) or
+>     via `NUXT_SQS_POLLER_DISABLED=true`. Stops on Nitro `close`.
+>   - `server/api/webhooks/ses.post.ts` — alternative for a direct SNS HTTPS
+>     subscription. Reads the raw `text/plain` body, **verifies the SNS signature**
+>     natively (`server/utils/snsSignature.ts`, no extra dep — RSA-SHA1/256 against
+>     the cert from an `sns.<region>.amazonaws.com` HTTPS URL), auto-confirms
+>     `SubscriptionConfirmation`, and processes `Notification`. Kept public by the
+>     existing nuxt.config `exclude: ['/api/webhooks/*']`.
+> - `server/utils/supabaseAdmin.ts` — lazy service-role client (RLS bypass) for
+>   these session-less flows; same env chain as the worker's client.
+> - **Verified end-to-end (real AWS)**: sent a live email to
+>   `bounce@simulator.amazonses.com`, seeded a matching `sends` row, and the
+>   running poller flipped send→`bounced`, contact→`bounced`, and wrote one
+>   `email_events` `bounced` row — while also draining leftover simulator/control
+>   messages (queue → 0). `typecheck` + `lint` clean.
 
 ### 1.9 Basic stats
-- [ ] `GET /api/campaigns/:id/stats` — return sent, failed, bounced, complained counts
-- [ ] Campaign detail page shows basic delivery summary
+- [x] `GET /api/campaigns/:id/stats` — return sent, failed, bounced, complained counts
+- [x] Campaign detail page shows basic delivery summary
+
+> **1.9 notes (2026-06-25)**
+> - `GET /api/campaigns/:id/stats` — one indexed COUNT per send status
+>   (queued/sent/failed/bounced/complained) run in parallel, plus `recipients`
+>   (sum) and derived `rates` (delivered/bounce/complaint/failed % of recipients,
+>   null when 0). After 1.8 a bounced/complained send leaves `sent`, so `sent` =
+>   "Delivered". 404 on unknown campaign. Phase 2.6 extends with open/click rates.
+> - `GET /api/campaigns/:id` — campaign details + resolved `listName` (added to
+>   back the detail page; matches the ARCHITECTURE API list). Both routes
+>   `requireUser`-guarded, `serverSupabaseClient<Database>` (RLS).
+> - `app/pages/campaigns/[id].vue` — detail page the list already linked to
+>   (the row "View stats" icon → `/campaigns/:id`). Design-system shell: header
+>   (name, subject, status badge, sent date / list / from + Refresh), 5 summary
+>   cards (Recipients/Delivered/Bounced/Complained/Failed with rates), and a
+>   stacked **delivery breakdown** bar + legend. Not-found + no-recipients states.
+> - Types: `CampaignDetail` + `CampaignStats` added to `app/types/campaign.ts`.
+> - Verified end-to-end (real authenticated session via a seeded test user;
+>   cookie minted with `@supabase/ssr` so `serverSupabaseUser` accepts it):
+>   mixed-status seed (3 sent / 1 bounced / 1 complained / 1 failed / 2 queued)
+>   → stats returned recipients 8, exact per-status counts, delivered 37.5% /
+>   bounce 12.5%; plus 401 without auth and 404 for an unknown id. Detail page
+>   renders via SSR with the real data (name, "Delivery breakdown", "Bounced").
+>   `typecheck` + `lint` clean.
 
 ---
 
