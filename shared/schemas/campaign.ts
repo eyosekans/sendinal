@@ -13,7 +13,9 @@ export type CampaignStatus = z.infer<typeof campaignStatusSchema>
 /** Payload for creating a draft campaign (POST /api/campaigns). */
 export const createCampaignSchema = z.object({
   name: z.string().trim().min(1).max(200),
-  subject: z.string().trim().min(1).max(300),
+  // Drafts may start with no subject (the builder autosaves before it's typed);
+  // a subject is only meaningful at send time.
+  subject: z.string().trim().max(300).default(''),
   fromName: z.string().trim().min(1).max(200).optional(),
   fromEmail: z.string().trim().toLowerCase().email().optional(),
   // html/design come from the Unlayer editor (Phase 2.1); empty for a bare draft.

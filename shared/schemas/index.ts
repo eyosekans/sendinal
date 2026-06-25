@@ -12,4 +12,5 @@
 export * from './contact'
 export * from './list'
 export * from './campaign'
+export * from './template'
 export * from './jobs'

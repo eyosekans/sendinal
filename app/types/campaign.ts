@@ -21,6 +21,8 @@ export interface CampaignDetail {
   subject: string
   from_name: string
   from_email: string
+  html: string
+  design: object
   status: CampaignStatus
   list_id: string | null
   listName: string | null

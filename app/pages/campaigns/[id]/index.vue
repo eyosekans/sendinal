@@ -31,6 +31,11 @@ useHead({
 })
 
 const notFound = computed(() => campaignError.value?.statusCode === 404)
+const canEdit = computed(
+  () =>
+    campaign.value?.status === 'draft' ||
+    campaign.value?.status === 'scheduled',
+)
 
 const refreshing = ref(false)
 async function refreshAll() {
@@ -195,18 +200,27 @@ const breakdown = computed(() => {
                 </span>
               </div>
             </div>
-            <button
-              type="button"
-              class="refresh-btn"
-              :disabled="refreshing"
-              @click="refreshAll"
-            >
-              <i
-                class="ph ph-arrows-clockwise"
-                :class="{ 'refresh-btn__spin': refreshing }"
-              />
-              Refresh
-            </button>
+            <div class="header__actions">
+              <NuxtLink
+                v-if="canEdit"
+                :to="`/campaigns/${id}/edit`"
+                class="edit-btn"
+              >
+                <i class="ph ph-pencil-simple" /> Edit
+              </NuxtLink>
+              <button
+                type="button"
+                class="refresh-btn"
+                :disabled="refreshing"
+                @click="refreshAll"
+              >
+                <i
+                  class="ph ph-arrows-clockwise"
+                  :class="{ 'refresh-btn__spin': refreshing }"
+                />
+                Refresh
+              </button>
+            </div>
           </div>
 
           <!-- summary cards -->
@@ -374,6 +388,33 @@ const breakdown = computed(() => {
 .meta-item .ph {
   font-size: 15px;
   color: var(--gray-400);
+}
+.header__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+.edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--radius-md);
+  background: var(--primary-600);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 100ms ease;
+}
+.edit-btn:hover {
+  background: var(--primary-800);
+}
+.edit-btn .ph {
+  font-size: 15px;
 }
 .refresh-btn {
   display: inline-flex;

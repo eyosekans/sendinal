@@ -378,13 +378,50 @@ Goal: a working platform that can send a plain-HTML email to a contact list and 
 Goal: full campaign builder with drag-and-drop editor, scheduling, open/click tracking, and an analytics dashboard.
 
 ### 2.1 Drag-and-drop email editor
-- [ ] Install `@unlayer/vue` and configure in Nuxt
-- [ ] Campaign builder page (`/campaigns/new`, `/campaigns/:id/edit`)
-- [ ] Embed Unlayer editor; export HTML + JSON design on save
-- [ ] `POST /api/templates` — save design as a reusable template
-- [ ] `GET /api/templates` — list templates
-- [ ] Load existing template into editor when starting a new campaign
-- [ ] Image upload: Unlayer upload handler → Supabase Storage → return CDN URL
+- [x] Install `@unlayer/vue` and configure in Nuxt _(corrected: `vue-email-editor` — `@unlayer/vue` does not exist on npm)_
+- [x] Campaign builder page (`/campaigns/new`, `/campaigns/:id/edit`)
+- [x] Embed Unlayer editor; export HTML + JSON design on save
+- [x] `POST /api/templates` — save design as a reusable template
+- [x] `GET /api/templates` — list templates
+- [x] Load existing template into editor when starting a new campaign
+- [x] Image upload: Unlayer upload handler → Supabase Storage → return CDN URL
+
+> **2.1 notes (2026-06-25 — built from Claude Design handoff `Campaign Builder.dc.html`)**
+> - Package: `@unlayer/vue` (in PROJECT_CONTEXT) doesn't exist on npm — used the
+>   official `vue-email-editor@2.2.0` (Unlayer's Vue 3 component) instead.
+> - Editor wrapper `app/components/campaigns/CampaignEditor.client.vue` — `.client`
+>   so it never SSRs (loads a remote embed script + touches `window`). Exposes
+>   `exportHtml()` / `loadDesign()`, emits `ready`/`change`, and registers the
+>   Unlayer image callback to POST to our upload API.
+> - `app/components/campaigns/CampaignBuilder.vue` — full-screen builder per the
+>   mockup (top bar + 320px settings panel + editor). **Autosaves** the draft
+>   (create-then-PATCH; first save POSTs, swaps the URL to `/campaigns/:id/edit`
+>   via replaceState), with the "Saving…/All changes saved" indicator. Target-list
+>   dropdown (from `/api/lists`), Save-as-template + Load-template modals, HTML
+>   Preview modal (iframe srcdoc), and Send (existing 1.7 endpoint). Toasts +
+>   locked (read-only) state for non-draft/scheduled campaigns.
+> - Pages use `layout: false` (full-screen, no app sidebar). To allow
+>   `/campaigns/:id` **and** `/campaigns/:id/edit` to coexist without the
+>   parent-route `<NuxtPage/>` gotcha, the detail page moved
+>   `campaigns/[id].vue` → `campaigns/[id]/index.vue`; added `[id]/edit.vue` and
+>   `new.vue`. Detail page gained an **Edit** button (draft/scheduled only).
+> - Templates API: `GET /api/templates` (paginated, name search; list omits the
+>   heavy `design`), `POST /api/templates` (201), `GET /api/templates/:id` (full,
+>   incl. `design` — used to load into the editor). Schema in
+>   `shared/schemas/template.ts`.
+> - `POST /api/uploads/image` — multipart → `template-assets` bucket → public CDN
+>   URL; `image/*` + 5 MB only. **Also satisfies task 2.7.**
+> - `GET /api/campaigns/:id` extended to return `html` + `design` (builder load).
+>   `createCampaignSchema.subject` relaxed to allow empty (drafts autosave before a
+>   subject is typed).
+> - **Deferred from the mockup** (per roadmap): A/B Test subject → **3.3** (MVP-out);
+>   Schedule Delivery toggle → **2.2** (next); Preview Text → no DB column yet.
+> - Verified: `nuxt build` clean (editor bundles); templates CRUD + image upload
+>   (incl. public reachability, 415 on non-image) + campaign design fetch all pass
+>   under a real authenticated session; `/campaigns/new`, `/campaigns/:id/edit` and
+>   `/campaigns/:id` all SSR-render + route correctly. `typecheck` + `lint` clean.
+>   NOTE: the live Unlayer drag-drop/export needs a browser — eyeball via
+>   `pnpm dev` + sign in.
 
 ### 2.2 Campaign scheduling
 - [ ] `POST /api/campaigns/:id/schedule` — set `scheduled_at`, update status to `scheduled`

@@ -30,6 +30,7 @@
     "ioredis": "5.10.1",
     "nuxt": "^4.4.8",
     "vue": "latest",
+    "vue-email-editor": "2.2.0",
     "vue-router": "latest",
     "zod": "^4.4.3"
   },
