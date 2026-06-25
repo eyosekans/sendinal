@@ -8,6 +8,7 @@ const supabase = useSupabaseClient()
 const route = useRoute()
 
 const nav = [
+  { label: 'Dashboard', to: '/', icon: 'ph-squares-four' },
   { label: 'Campaigns', to: '/campaigns', icon: 'ph-paper-plane-tilt' },
   { label: 'Contacts', to: '/contacts', icon: 'ph-users' },
   { label: 'Templates', to: '/templates', icon: 'ph-layout' },

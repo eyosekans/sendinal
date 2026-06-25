@@ -32,7 +32,25 @@ export interface CampaignDetail {
   updated_at: string
 }
 
-/** Delivery summary for a campaign (GET /api/campaigns/:id/stats). */
+/** Aggregate metrics for the overview dashboard (GET /api/dashboard/stats). */
+export interface DashboardStats {
+  totalSent: number
+  totalSentTrend: number | null
+  activeContacts: number
+  activeContactsTrend: number | null
+  avgOpenRate: number | null
+  avgClickRate: number | null
+  sentCampaigns: number
+  health: {
+    delivered: number
+    bounced: number
+    complained: number
+    deliverability: number | null
+  }
+  sendsOverTime: { date: string; count: number }[]
+}
+
+/** Delivery + engagement summary for a campaign (GET /api/campaigns/:id/stats). */
 export interface CampaignStats {
   campaignId: string
   recipients: number
@@ -42,9 +60,14 @@ export interface CampaignStats {
     failed: number
     bounced: number
     complained: number
+    /** Unique sends with at least one open / click. */
+    opened: number
+    clicked: number
   }
   rates: {
     delivered: number | null
+    open: number | null
+    click: number | null
     bounce: number | null
     complaint: number | null
     failed: number | null

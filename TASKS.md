@@ -546,9 +546,38 @@ Goal: full campaign builder with drag-and-drop editor, scheduling, open/click tr
 >   not-valid page. app `typecheck` + worker `tsc` + `lint` clean.
 
 ### 2.6 Analytics dashboard
-- [ ] `GET /api/campaigns/:id/stats` — extend to return open_count, click_count, open_rate, click_rate, bounce_rate
+- [x] `GET /api/campaigns/:id/stats` — extend to return open_count, click_count, open_rate, click_rate, bounce_rate
 - [ ] Campaign stats page: summary cards + vue-chartjs line chart (events over time)
-- [ ] Overview dashboard (`/`) — aggregate stats across all campaigns (total sent, avg open rate, avg click rate)
+- [x] Overview dashboard (`/`) — aggregate stats across all campaigns (total sent, avg open rate, avg click rate)
+
+> **2.6 notes (2026-06-25 — Dashboard built from Claude Design handoff `Marketing Hub.dc.html`)**
+> - Scope confirmed with the user: **Dashboard only** (kept the existing 1.5 shell
+>   + 1.7 campaigns list), brand stays **Sendinal**, charts via **vue-chartjs**.
+> - **Stats endpoint extended**: `GET /api/campaigns/:id/stats` now returns
+>   `counts.opened`/`counts.clicked` (unique per send) and `rates.open`/`rates.click`
+>   alongside the delivery figures. Fetches sends once + dedupes open/click events
+>   in-app. `CampaignStats` type updated.
+> - **Overview dashboard** `app/pages/index.vue` (was a placeholder): top bar
+>   (search/notifications/New Campaign), 4 metric cards (Total Sent + MoM trend,
+>   Avg Open Rate, Avg Click Rate, Active Contacts + MoM trend), a Sends-Over-Time
+>   bar chart + Campaign-Health deliverability donut, and a Recent Campaigns table.
+>   Added a **Dashboard** nav item to `app/layouts/default.vue`.
+> - **Backend** `GET /api/dashboard/stats` — aggregates across all sends/events/
+>   contacts: totalSent (+ this-vs-last-month trend), activeContacts (+ trend),
+>   avg open/click rate over delivered, deliverability health (delivered/bounced/
+>   complained), and a 30-day daily delivered series. Rate cards show
+>   "across N sent campaigns" instead of a fabricated trend. (In-app aggregation;
+>   Phase 4.7 caches.)
+> - Charts: `chart.js@4` + `vue-chartjs@5`. `SendsBarChart.client.vue` (Bar) and
+>   `HealthDonut.client.vue` (Doughnut + center-label plugin) are `.client` so
+>   they never SSR; wrapped in `<ClientOnly>` with fallbacks.
+> - Verified: `nuxt build` clean (charts bundle); real-data e2e (before/after
+>   deltas) — delivered +4 / bounced +1 / totalSent +5 / activeContacts +5,
+>   today's series bucket +4, avgOpenRate computed, page SSR renders cards +
+>   recent table + chart panels. `typecheck` + `lint` clean.
+> - **Remaining (item 2):** per-campaign stats page line chart (events over time).
+>   The detail page (1.9) already shows summary cards; needs open/click cards + a
+>   time-series chart. No design provided for it yet — awaiting the user's call.
 
 ### 2.7 Supabase Storage image management
 - [ ] Unlayer upload handler: `POST /api/uploads/image` — receives file, uploads to Supabase Storage, returns CDN URL

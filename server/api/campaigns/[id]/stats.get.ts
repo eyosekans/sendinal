@@ -4,21 +4,14 @@ import type { Database, SendStatus } from '~~/app/types/database.types'
 
 /**
  * GET /api/campaigns/:id/stats
- * Delivery summary for a campaign: a count of `sends` per status plus a few
- * derived rates. After task 1.8, a bounced/complained recipient moves out of
- * `sent`, so `sent` here means "delivered to SES and neither bounced nor
- * complained" — used as the Delivered figure.
+ * Delivery + engagement summary for a campaign: a count of `sends` per status,
+ * unique open/click counts from `email_events`, and derived rates. After task
+ * 1.8 a bounced/complained recipient moves out of `sent`, so `sent` here means
+ * "delivered to SES and neither bounced nor complained" — the Delivered figure.
  *
- * Phase 2.6 extends this with open_count / click_count / open_rate / click_rate.
+ * Open/click are **unique per send** (one recipient counted once). Rates are a
+ * percentage of recipients. Metrics are computed in-app; Phase 4.7 caches this.
  */
-const STATUSES = [
-  'queued',
-  'sent',
-  'failed',
-  'bounced',
-  'complained',
-] as const satisfies readonly SendStatus[]
-
 export default defineEventHandler(async (event) => {
   await requireUser(event)
 
@@ -41,35 +34,57 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Campaign not found' })
   }
 
-  // One indexed COUNT per status (sends.campaign_id is indexed), run in parallel.
-  const pairs = await Promise.all(
-    STATUSES.map(async (status) => {
-      const { count, error } = await supabase
-        .from('sends')
-        .select('*', { count: 'exact', head: true })
-        .eq('campaign_id', id)
-        .eq('status', status)
-      if (error) {
-        throw createError({ statusCode: 500, statusMessage: error.message })
-      }
-      return [status, count ?? 0] as const
-    }),
-  )
+  // All sends for the campaign (id + status), tallied in-app.
+  const { data: sendRows, error: sErr } = await supabase
+    .from('sends')
+    .select('id, status')
+    .eq('campaign_id', id)
+  if (sErr) {
+    throw createError({ statusCode: 500, statusMessage: sErr.message })
+  }
+  const sends = sendRows ?? []
 
-  const counts = Object.fromEntries(pairs) as Record<
-    (typeof STATUSES)[number],
-    number
-  >
-  const recipients = STATUSES.reduce((sum, s) => sum + counts[s], 0)
+  const counts: Record<SendStatus, number> = {
+    queued: 0,
+    sent: 0,
+    failed: 0,
+    bounced: 0,
+    complained: 0,
+  }
+  for (const s of sends) counts[s.status]++
+  const recipients = sends.length
+
+  // Unique opens/clicks: dedupe email_events back to distinct send ids.
+  const openedSends = new Set<string>()
+  const clickedSends = new Set<string>()
+  const sendIds = sends.map((s) => s.id)
+  if (sendIds.length) {
+    const { data: events, error: eErr } = await supabase
+      .from('email_events')
+      .select('send_id, type')
+      .in('send_id', sendIds)
+      .in('type', ['opened', 'clicked'])
+    if (eErr) {
+      throw createError({ statusCode: 500, statusMessage: eErr.message })
+    }
+    for (const e of events ?? []) {
+      ;(e.type === 'opened' ? openedSends : clickedSends).add(e.send_id)
+    }
+  }
+  const opened = openedSends.size
+  const clicked = clickedSends.size
+
   const pct = (n: number) =>
     recipients ? Number(((n / recipients) * 100).toFixed(1)) : null
 
   return {
     campaignId: id,
     recipients,
-    counts,
+    counts: { ...counts, opened, clicked },
     rates: {
       delivered: pct(counts.sent),
+      open: pct(opened),
+      click: pct(clicked),
       bounce: pct(counts.bounced),
       complaint: pct(counts.complained),
       failed: pct(counts.failed),
