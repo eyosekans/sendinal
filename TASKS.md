@@ -424,10 +424,41 @@ Goal: full campaign builder with drag-and-drop editor, scheduling, open/click tr
 >   `pnpm dev` + sign in.
 
 ### 2.2 Campaign scheduling
-- [ ] `POST /api/campaigns/:id/schedule` — set `scheduled_at`, update status to `scheduled`
-- [ ] Nitro cron job (or Railway cron): every minute, find scheduled campaigns where `scheduled_at <= NOW()` and dispatch them
-- [ ] Campaign list shows scheduled time and countdown
-- [ ] Cancel scheduled campaign: `PATCH /api/campaigns/:id` with `status = 'cancelled'`
+- [x] `POST /api/campaigns/:id/schedule` — set `scheduled_at`, update status to `scheduled`
+- [x] Nitro cron job (or Railway cron): every minute, find scheduled campaigns where `scheduled_at <= NOW()` and dispatch them
+- [x] Campaign list shows scheduled time and countdown
+- [x] Cancel scheduled campaign: `PATCH /api/campaigns/:id` with `status = 'cancelled'`
+
+> **2.2 notes (2026-06-25)**
+> - `POST /api/campaigns/:id/schedule` — `scheduleCampaignSchema` (`scheduledAt`
+>   ISO, must be future); allowed from draft/scheduled (reschedule), requires a
+>   list. Sets `status='scheduled'` + `scheduled_at` atomically.
+> - `server/plugins/scheduled-dispatcher.ts` — Nitro plugin, every 60s (+ a boot
+>   sweep at 5s) finds `status='scheduled' AND scheduled_at <= now()`, **atomically
+>   claims** each (scheduled→sending, status-matched UPDATE so concurrent replicas
+>   can't double-fire), then enqueues a `campaign.dispatch` job — same worker path
+>   as an immediate send. Rolls back to `scheduled` if the enqueue fails.
+>   Auto-disabled without `REDIS_URL` or via `NUXT_SCHEDULER_DISABLED=true`.
+>   (Chose a plugin over Nitro scheduled-tasks: works on the Railway node preset
+>   with no extra cron wiring, mirrors the existing `sqs-poller` plugin.)
+> - Cancel: `updateCampaignSchema` gained `status: z.literal('cancelled')` (the
+>   only status change PATCH allows); the existing draft/scheduled edit-lock
+>   already permits it. Detail page shows a **Cancel** button for scheduled
+>   campaigns (reuses `ConfirmDeleteModal`).
+> - Campaigns list: scheduled rows show the date + a client-only **countdown**
+>   pill (`in 3d`/`in 5h`/`in 12m`/`due now`), gated behind a mounted flag to
+>   avoid SSR/hydration drift.
+> - **Builder Schedule toggle activated** (was deferred from 2.1): the left-panel
+>   "Schedule Delivery" switch + date/time inputs now drive the primary button
+>   (`Send Campaign` ⇄ `Schedule Campaign`) and POST to the schedule endpoint;
+>   prefilled from `scheduled_at` when editing a scheduled campaign.
+> - Verified end-to-end (real Redis + auth): the scheduler dispatched a past-due
+>   campaign (scheduled→sending, confirmed in logs); schedule future=200 /
+>   past=400 / no-list=400; cancel→cancelled; `PATCH status:'sent'` rejected=400;
+>   401 without auth; builder/detail/list UI all render the scheduling controls.
+>   `nuxt build` + `typecheck` + `lint` clean. (Bug found + fixed mid-task: a
+>   stale dev-server process from an earlier task was answering requests without
+>   the new plugin — killed it; scheduler then dispatched correctly.)
 
 ### 2.3 Open tracking
 - [ ] At dispatch time: generate a unique token per send, store in `tracking_tokens` (type = 'open')

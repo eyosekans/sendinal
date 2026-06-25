@@ -74,7 +74,37 @@ function onEditorReady() {
 
 /* ---------- save status ---------- */
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
-const saveState = ref<SaveState>('idle')
+const saveState = ref<SaveState>(existing ? 'saved' : 'idle')
+const lastSavedAt = ref<number | null>(
+  existing?.updated_at ? new Date(existing.updated_at).getTime() : null,
+)
+
+/* ---------- editable name (static text → input on edit) ---------- */
+const editingName = ref(false)
+const nameInput = ref<HTMLInputElement | null>(null)
+function startEditName() {
+  if (locked.value) return
+  editingName.value = true
+  nextTick(() => nameInput.value?.focus())
+}
+
+/* ---------- relative "last saved" label ---------- */
+const mounted = ref(false)
+const nowTick = ref(Date.now())
+let tickTimer: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  mounted.value = true
+  tickTimer = setInterval(() => (nowTick.value = Date.now()), 15000)
+})
+onBeforeUnmount(() => clearInterval(tickTimer))
+const relativeSaved = computed(() => {
+  if (!lastSavedAt.value) return ''
+  const s = Math.max(0, Math.floor((nowTick.value - lastSavedAt.value) / 1000))
+  if (s < 45) return 'just now'
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  return `${Math.floor(m / 60)}h ago`
+})
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 function scheduleSave() {
@@ -132,6 +162,7 @@ async function doSave() {
       })
     }
     saveState.value = 'saved'
+    lastSavedAt.value = Date.now()
   } catch (err) {
     saveState.value = 'error'
     toast('error', 'Could not save', errMsg(err))
@@ -160,6 +191,56 @@ const listLabel = computed(() =>
 function pickList(id: string) {
   listId.value = id
   listOpen.value = false
+}
+
+/* ---------- schedule ---------- */
+function localParts(iso: string | null): { date: string; time: string } {
+  if (!iso) return { date: '', time: '' }
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  }
+}
+const initSched = localParts(existing?.scheduled_at ?? null)
+const scheduleOn = ref(existing?.status === 'scheduled')
+const scheduleDate = ref(initSched.date)
+const scheduleTime = ref(initSched.time)
+const scheduling = ref(false)
+
+async function scheduleCampaign() {
+  if (locked.value) return
+  if (!scheduleDate.value || !scheduleTime.value) {
+    toast('error', 'Pick a date and time')
+    return
+  }
+  const when = new Date(`${scheduleDate.value}T${scheduleTime.value}`)
+  if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) {
+    toast('error', 'Schedule time must be in the future')
+    return
+  }
+  // Persist the latest content, then schedule.
+  clearTimeout(saveTimer)
+  await doSave()
+  if (!campaignId.value) return
+  if (!listId.value) {
+    toast('error', 'Pick a recipient list first')
+    return
+  }
+  scheduling.value = true
+  try {
+    await $fetch(`/api/campaigns/${campaignId.value}/schedule`, {
+      method: 'POST',
+      body: { scheduledAt: when.toISOString() },
+    })
+    toast('success', 'Campaign scheduled')
+    await navigateTo(`/campaigns/${campaignId.value}`)
+  } catch (err) {
+    toast('error', 'Could not schedule', errMsg(err))
+  } finally {
+    scheduling.value = false
+  }
 }
 
 /* ---------- templates ---------- */
@@ -294,37 +375,60 @@ const TOAST_COLOR = {
     <!-- ===================== TOP BAR ===================== -->
     <div class="topbar">
       <div class="topbar__left">
-        <button
-          type="button"
-          class="iconbtn"
+        <div
+          class="backbtn"
           title="Back to campaigns"
           @click="navigateTo('/campaigns')"
         >
           <i class="ph ph-arrow-left" />
-        </button>
-        <input
-          v-model="name"
-          spellcheck="false"
-          class="nameinput"
-          :disabled="locked"
-        />
-        <div class="savestate">
-          <template v-if="locked">
-            <i class="ph ph-lock-simple" style="color: var(--gray-500)" />
-            <span style="color: var(--gray-500)">{{ status }} — read only</span>
-          </template>
-          <template v-else-if="saveState === 'saving'">
-            <i class="ph ph-circle-notch spin" style="color: var(--gray-500)" />
-            <span style="color: var(--gray-500)">Saving…</span>
-          </template>
-          <template v-else-if="saveState === 'saved'">
-            <i class="ph ph-check-circle" style="color: var(--success-600)" />
-            <span style="color: var(--success-600)">All changes saved</span>
-          </template>
-          <template v-else-if="saveState === 'error'">
-            <i class="ph ph-warning-circle" style="color: var(--danger-600)" />
-            <span style="color: var(--danger-600)">Save failed</span>
-          </template>
+        </div>
+        <div class="topbar__divider" />
+        <div class="namecol">
+          <div class="namerow">
+            <input
+              v-if="editingName"
+              ref="nameInput"
+              v-model="name"
+              spellcheck="false"
+              class="nameinput"
+              @blur="editingName = false"
+              @keyup.enter="editingName = false"
+            />
+            <template v-else>
+              <span class="nametext" @click="startEditName">{{ name }}</span>
+              <i
+                v-if="!locked"
+                class="ph ph-pencil-simple nameedit"
+                title="Rename"
+                @click="startEditName"
+              />
+            </template>
+          </div>
+          <div class="statusrow">
+            <template v-if="locked">
+              <i class="ph ph-lock-simple" style="color: var(--gray-500)" />
+              <span class="status-muted">{{ status }} · read only</span>
+            </template>
+            <template v-else-if="saveState === 'saving'">
+              <i class="ph ph-circle-notch spin" style="color: var(--gray-500)" />
+              <span class="status-muted">Saving…</span>
+            </template>
+            <template v-else-if="saveState === 'error'">
+              <i class="ph ph-warning-circle" style="color: var(--danger-600)" />
+              <span style="color: var(--danger-600)">Save failed</span>
+            </template>
+            <template v-else-if="saveState === 'saved'">
+              <i class="ph ph-check-circle" style="color: var(--success-600)" />
+              <span class="status-saved">Changes auto-saved</span>
+              <template v-if="mounted && relativeSaved">
+                <span class="status-dot">·</span>
+                <span class="status-dim">Last saved {{ relativeSaved }}</span>
+              </template>
+            </template>
+            <template v-else>
+              <span class="status-dim">Not saved yet</span>
+            </template>
+          </div>
         </div>
       </div>
       <div class="topbar__right">
@@ -340,11 +444,22 @@ const TOAST_COLOR = {
         <button
           type="button"
           class="btn-primary"
-          :disabled="locked || sending"
-          @click="send"
+          :disabled="locked || sending || scheduling"
+          @click="scheduleOn ? scheduleCampaign() : send()"
         >
-          <i class="ph-fill ph-paper-plane-tilt" />
-          {{ sending ? 'Sending…' : 'Send Campaign' }}
+          <i
+            class="ph-fill"
+            :class="scheduleOn ? 'ph-clock' : 'ph-paper-plane-tilt'"
+          />
+          {{
+            scheduleOn
+              ? scheduling
+                ? 'Scheduling…'
+                : 'Schedule Campaign'
+              : sending
+                ? 'Sending…'
+                : 'Send Campaign'
+          }}
         </button>
       </div>
     </div>
@@ -428,6 +543,44 @@ const TOAST_COLOR = {
                   style="color: var(--primary-600)"
                 />
               </div>
+            </div>
+          </div>
+
+          <div
+            class="toggle-row"
+            :class="{
+              'toggle-row--on': scheduleOn,
+              'toggle-row--disabled': locked,
+            }"
+            @click="!locked && (scheduleOn = !scheduleOn)"
+          >
+            <div>
+              <div class="toggle-row__title">Schedule Delivery</div>
+              <div class="toggle-row__sub">Pick a future date &amp; time</div>
+            </div>
+            <div class="switch" :class="{ 'switch--on': scheduleOn }">
+              <div class="switch__knob" />
+            </div>
+          </div>
+
+          <div v-if="scheduleOn" class="sched-fields">
+            <div class="sched-fields__date">
+              <label class="field__label">Date</label>
+              <input
+                v-model="scheduleDate"
+                type="date"
+                class="input"
+                :disabled="locked"
+              />
+            </div>
+            <div class="sched-fields__time">
+              <label class="field__label">Time</label>
+              <input
+                v-model="scheduleTime"
+                type="time"
+                class="input"
+                :disabled="locked"
+              />
             </div>
           </div>
         </div>
@@ -594,7 +747,7 @@ const TOAST_COLOR = {
 .topbar__left {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 14px;
   min-width: 0;
 }
 .topbar__right {
@@ -623,39 +776,96 @@ const TOAST_COLOR = {
 .iconbtn .ph {
   font-size: 20px;
 }
-.nameinput {
-  border: 1px solid transparent;
-  background: transparent;
+.backbtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 100ms ease;
+}
+.backbtn:hover {
+  background: var(--gray-100);
+}
+.backbtn .ph {
+  font-size: 20px;
+  color: var(--gray-600);
+}
+.topbar__divider {
+  width: 1px;
+  height: 28px;
+  background: var(--gray-200);
+  flex-shrink: 0;
+}
+.namecol {
+  min-width: 0;
+}
+.namerow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+}
+.nametext {
   font-family: var(--font-display);
   font-weight: 500;
-  font-size: 20px;
-  color: var(--gray-900);
-  padding: 6px 10px;
+  font-size: 18px;
+  color: var(--gray-800);
+  cursor: text;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nameedit {
+  font-size: 15px;
+  color: var(--gray-400);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.nameedit:hover {
+  color: var(--primary-600);
+}
+.nameinput {
+  border: 1px solid var(--gray-200);
+  background: #fff;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 18px;
+  color: var(--gray-800);
+  padding: 3px 8px;
   border-radius: var(--radius-md);
   width: 300px;
   outline: none;
 }
-.nameinput:hover:not(:disabled) {
-  background: var(--gray-50);
-}
 .nameinput:focus {
-  background: #fff;
   border-color: var(--primary-600);
   outline: 2px solid var(--primary-100);
 }
-.nameinput:disabled {
-  cursor: default;
-}
-.savestate {
+.statusrow {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-left: 8px;
-  font-size: 13px;
-  flex-shrink: 0;
+  gap: 7px;
+  margin-top: 1px;
+  font-size: 12px;
 }
-.savestate .ph {
-  font-size: 16px;
+.statusrow .ph {
+  font-size: 14px;
+}
+.status-saved {
+  color: var(--success-600);
+}
+.status-muted {
+  color: var(--gray-500);
+}
+.status-dim {
+  color: var(--gray-400);
+}
+.status-dot {
+  color: var(--gray-300);
 }
 
 .btn-primary {
@@ -859,6 +1069,80 @@ const TOAST_COLOR = {
   padding: 12px 10px;
   font-size: 13px;
   color: var(--gray-500);
+}
+
+/* schedule toggle */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+.toggle-row:hover {
+  border-color: var(--gray-300);
+}
+.toggle-row--on {
+  background: var(--primary-50);
+  border-color: var(--primary-200);
+}
+.toggle-row--disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.toggle-row__title {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--gray-800);
+}
+.toggle-row__sub {
+  font-size: 13px;
+  color: var(--gray-500);
+  margin-top: 1px;
+}
+.switch {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  background: var(--gray-300);
+  transition: background-color 150ms ease;
+}
+.switch--on {
+  background: var(--primary-600);
+}
+.switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: var(--radius-full);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 150ms ease;
+}
+.switch--on .switch__knob {
+  transform: translateX(18px);
+}
+.sched-fields {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.sched-fields__date {
+  flex: 1;
+}
+.sched-fields__time {
+  width: 116px;
 }
 
 .panel__footer {

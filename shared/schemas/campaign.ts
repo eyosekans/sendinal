@@ -27,8 +27,19 @@ export const createCampaignSchema = z.object({
 export type CreateCampaignInput = z.infer<typeof createCampaignSchema>
 
 /** Payload for updating a draft campaign (PATCH /api/campaigns/:id). */
-export const updateCampaignSchema = createCampaignSchema.partial()
+export const updateCampaignSchema = createCampaignSchema.partial().extend({
+  // The only status transition allowed through PATCH is cancelling a
+  // draft/scheduled campaign. All other transitions go through dedicated routes.
+  status: z.literal('cancelled').optional(),
+})
 export type UpdateCampaignInput = z.infer<typeof updateCampaignSchema>
+
+/** Payload for scheduling a campaign (POST /api/campaigns/:id/schedule). */
+export const scheduleCampaignSchema = z.object({
+  // ISO 8601 instant (UTC `Z` or with an offset); must be in the future.
+  scheduledAt: z.string().datetime({ offset: true }),
+})
+export type ScheduleCampaignInput = z.infer<typeof scheduleCampaignSchema>
 
 /** Query params for listing campaigns (GET /api/campaigns). */
 export const listCampaignsQuerySchema = z.object({

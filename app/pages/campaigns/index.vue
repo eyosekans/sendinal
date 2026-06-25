@@ -224,6 +224,25 @@ function sentDateCell(c: CampaignListItem) {
   if (c.status === 'scheduled' && c.scheduled_at) return fmtDate(c.scheduled_at)
   return '—'
 }
+
+/* ---------- scheduled countdown (client-only to avoid SSR drift) ---------- */
+const mounted = ref(false)
+const nowTick = ref(Date.now())
+let cdTimer: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  mounted.value = true
+  cdTimer = setInterval(() => (nowTick.value = Date.now()), 60000)
+})
+onBeforeUnmount(() => clearInterval(cdTimer))
+function scheduledCountdown(iso: string) {
+  const diff = new Date(iso).getTime() - nowTick.value
+  if (diff <= 0) return 'due now'
+  const m = Math.floor(diff / 60000)
+  if (m < 60) return `in ${m}m`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `in ${h}h`
+  return `in ${Math.floor(h / 24)}d`
+}
 function rateBar(rate: number, kind: 'open' | 'click') {
   return Math.min(100, rate * (kind === 'open' ? 1.6 : 8))
 }
@@ -555,7 +574,15 @@ const isEmpty = computed(() => !pending.value && displayed.value.length === 0)
                 </div>
               </div>
             </div>
-            <div class="cell-muted">{{ sentDateCell(c) }}</div>
+            <div class="cell-muted">
+              <template v-if="c.status === 'scheduled' && c.scheduled_at">
+                {{ fmtDate(c.scheduled_at) }}
+                <span v-if="mounted" class="countdown">{{
+                  scheduledCountdown(c.scheduled_at)
+                }}</span>
+              </template>
+              <template v-else>{{ sentDateCell(c) }}</template>
+            </div>
             <div class="cell-actions">
               <NuxtLink
                 :to="`/campaigns/${c.id}`"
@@ -1081,6 +1108,16 @@ const isEmpty = computed(() => !pending.value && displayed.value.length === 0)
 .cell-muted {
   font-size: 13px;
   color: var(--gray-500);
+}
+.countdown {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--warning-100);
+  color: var(--warning-600);
+  font-size: 11px;
+  font-weight: 500;
 }
 .cell-dash {
   font-size: 13px;

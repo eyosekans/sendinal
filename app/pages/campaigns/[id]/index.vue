@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CampaignDetail, CampaignStats } from '~/types/campaign'
 import CampaignStatusBadge from '~/components/campaigns/CampaignStatusBadge.vue'
+import ConfirmDeleteModal from '~/components/ConfirmDeleteModal.vue'
 
 const route = useRoute()
 const id = route.params.id as string
@@ -37,6 +38,8 @@ const canEdit = computed(
     campaign.value?.status === 'scheduled',
 )
 
+const isScheduled = computed(() => campaign.value?.status === 'scheduled')
+
 const refreshing = ref(false)
 async function refreshAll() {
   refreshing.value = true
@@ -44,6 +47,23 @@ async function refreshAll() {
     await Promise.all([refreshCampaign(), refreshStats()])
   } finally {
     refreshing.value = false
+  }
+}
+
+/* ---------- cancel a scheduled send ---------- */
+const showCancel = ref(false)
+const cancelling = ref(false)
+async function confirmCancel() {
+  cancelling.value = true
+  try {
+    await $fetch(`/api/campaigns/${id}`, {
+      method: 'PATCH',
+      body: { status: 'cancelled' },
+    })
+    showCancel.value = false
+    await refreshCampaign()
+  } finally {
+    cancelling.value = false
   }
 }
 
@@ -201,6 +221,14 @@ const breakdown = computed(() => {
               </div>
             </div>
             <div class="header__actions">
+              <button
+                v-if="isScheduled"
+                type="button"
+                class="cancel-btn"
+                @click="showCancel = true"
+              >
+                <i class="ph ph-x-circle" /> Cancel
+              </button>
               <NuxtLink
                 v-if="canEdit"
                 :to="`/campaigns/${id}/edit`"
@@ -278,6 +306,16 @@ const breakdown = computed(() => {
         </template>
       </div>
     </div>
+
+    <ConfirmDeleteModal
+      :open="showCancel"
+      title="Cancel scheduled send?"
+      body="This campaign will not be sent at its scheduled time. You can't reschedule a cancelled campaign."
+      confirm-label="Cancel send"
+      :loading="cancelling"
+      @cancel="showCancel = false"
+      @confirm="confirmCancel"
+    />
   </div>
 </template>
 
@@ -394,6 +432,31 @@ const breakdown = computed(() => {
   align-items: center;
   gap: 10px;
   flex: none;
+}
+.cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--danger-100);
+  border-radius: var(--radius-md);
+  background: #fff;
+  color: var(--danger-600);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 100ms ease,
+    border-color 100ms ease;
+}
+.cancel-btn:hover {
+  background: var(--danger-100);
+  border-color: var(--danger-600);
+}
+.cancel-btn .ph {
+  font-size: 15px;
 }
 .edit-btn {
   display: inline-flex;
