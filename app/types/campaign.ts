@@ -26,6 +26,7 @@ export interface CampaignDetail {
   status: CampaignStatus
   list_id: string | null
   listName: string | null
+  segment_rules: unknown
   scheduled_at: string | null
   sent_at: string | null
   created_at: string

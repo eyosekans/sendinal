@@ -5,6 +5,8 @@ import {
   QUEUE_NAMES,
 } from '../../shared/schemas/jobs.ts'
 import type { EmailSendJob } from '../../shared/schemas/jobs.ts'
+import { segmentRulesSchema } from '../../shared/schemas/segment.ts'
+import { matchesSegmentRules } from '../../shared/segments.ts'
 import { connection } from '../queues/connection.ts'
 import { supabase } from '../lib/supabase.ts'
 import { finalizeCampaignIfComplete } from '../lib/sends.ts'
@@ -32,7 +34,9 @@ export async function processCampaignDispatch(job: Job) {
 
   const { data: campaign, error: cErr } = await supabase
     .from('campaigns')
-    .select('id, subject, html, from_name, from_email, list_id, status')
+    .select(
+      'id, subject, html, from_name, from_email, list_id, status, segment_rules',
+    )
     .eq('id', campaignId)
     .single()
   if (cErr || !campaign) throw new Error(`campaign ${campaignId} not found`)
@@ -52,16 +56,24 @@ export async function processCampaignDispatch(job: Job) {
     return
   }
 
-  const { data: contacts, error: ctErr } = await supabase
+  const { data: sendable, error: ctErr } = await supabase
     .from('contacts')
-    .select('id, email')
+    .select('id, email, first_name, last_name, status, attributes')
     .in('id', memberIds)
     .eq('status', 'active')
     .eq('email_unverified', false)
     .is('deleted_at', null)
   if (ctErr) throw ctErr
 
-  if (!contacts || contacts.length === 0) {
+  // Apply the campaign's segment rules (task 3.2) on top of the list. An empty
+  // rule set matches everyone, so unsegmented campaigns target the whole list.
+  const segment = segmentRulesSchema.safeParse(campaign.segment_rules ?? {})
+  const segmentRules = segment.success ? segment.data.rules : []
+  const contacts = (sendable ?? []).filter((c) =>
+    matchesSegmentRules(c, segmentRules),
+  )
+
+  if (contacts.length === 0) {
     await finalizeCampaignIfComplete(campaignId)
     console.log(
       `[campaign.dispatch] campaign ${campaignId}: no eligible contacts`,

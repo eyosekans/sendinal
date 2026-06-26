@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { segmentRulesSchema } from './segment'
 
 export const campaignStatusSchema = z.enum([
   'draft',
@@ -22,7 +23,8 @@ export const createCampaignSchema = z.object({
   html: z.string().default(''),
   design: z.record(z.string(), z.unknown()).default({}),
   listId: z.string().uuid().optional(),
-  segmentRules: z.record(z.string(), z.unknown()).default({}),
+  // Structured AND-rules (task 3.2). A legacy `{}` parses to an empty segment.
+  segmentRules: segmentRulesSchema.default({ match: 'all', rules: [] }),
 })
 export type CreateCampaignInput = z.infer<typeof createCampaignSchema>
 

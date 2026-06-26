@@ -680,12 +680,68 @@ Goal: smart targeting with custom contact attributes, dynamic segments, and basi
 > - Verified: `pnpm typecheck`, worker `tsc`, `pnpm lint`, `pnpm build` all clean.
 
 ### 3.2 Segment builder
-- [ ] Segment rule schema: `{ field, operator, value }[]` with AND logic
-  - Fields: `email`, `first_name`, `status`, `attributes.*`, `last_opened_at`, `last_clicked_at`
+- [x] Segment rule schema: `{ field, operator, value }[]` with AND logic
+  - Fields: `email`, `first_name`, `last_name`, `status`, `attributes.*`  _(activity fields `last_opened_at`/`last_clicked_at` deferred — see notes)_
   - Operators: `equals`, `contains`, `greater_than`, `less_than`, `is_set`, `is_not_set`
-- [ ] Segment builder UI — add/remove conditions, preview estimated recipient count
-- [ ] `POST /api/segments/preview` — evaluate rules against DB, return contact count
-- [ ] At dispatch time: apply `segment_rules` as SQL WHERE conditions on top of the list
+- [x] Segment builder UI — add/remove conditions, preview estimated recipient count
+- [x] `POST /api/segments/preview` — evaluate rules against DB, return contact count
+- [x] At dispatch time: apply `segment_rules` on top of the list  _(in-app filter, not raw SQL WHERE — see notes)_
+
+> **3.2 notes (2026-06-26)**
+> - **Scope (confirmed with user):** "easy" fields only — profile columns
+>   (`email`, `first_name`, `last_name`, `status`) + custom `attributes.*`.
+>   Activity fields (`last_opened_at` / `last_clicked_at`) **deferred**: they need
+>   an `email_events` join and arguably a denormalised column; revisit if needed.
+>   Segments are stored **inline** on `campaigns.segment_rules` (no new
+>   table/migration) — the column already existed (default `{}`).
+> - **Schema** `shared/schemas/segment.ts`: `segmentRuleSchema`
+>   (`{ field, operator, value? }`; value required for value-operators, omitted
+>   for `is_set`/`is_not_set`; field validated as a known profile column or
+>   `attributes.<key>`), `segmentRulesSchema` (`{ match: 'all', rules[] }` — AND
+>   logic; legacy `{}` parses to an empty segment = whole list), and
+>   `segmentPreviewSchema`. `campaign.ts → segmentRules` upgraded from a generic
+>   `z.record` to `segmentRulesSchema` (back-compat: `{}` → empty).
+> - **Evaluator** `shared/segments.ts → matchesSegmentRules(contact, rules)`:
+>   pure, dependency-free (no relative imports) so it type-checks under both the
+>   Nuxt "shared" layer (bundler) and the worker (NodeNext). Callers parse
+>   `segment_rules` with `segmentRulesSchema` first. Numeric→date→string operator
+>   coercion; AND across rules; empty ⇒ matches everyone.
+>   **Chose in-app evaluation over SQL WHERE** so preview and dispatch share one
+>   code path with consistent numeric/date/JSONB-attribute semantics (dispatch
+>   already loads all list members into memory).
+> - **Preview** `POST /api/segments/preview` `{ listId, rules }` → `{ count, total }`
+>   (`total` = sendable list members, `count` = after the segment). Mirrors the
+>   dispatch eligibility filter (active, not soft-deleted, not flagged) so the
+>   estimate equals real recipients.
+> - **Dispatch** `worker/processors/campaign-dispatch.ts`: selects `segment_rules`
+>   + the segment fields, then filters sendable members through
+>   `matchesSegmentRules`. Unsegmented campaigns are unaffected (empty ⇒ whole list).
+> - **UI** in `CampaignBuilder.vue` (left panel, under Target List): add/remove
+>   AND-conditions (field select + operator + value; valueless operators hide the
+>   value), live debounced "**N of M recipients**" preview, autosaved into the
+>   draft. Locked (read-only) once the campaign leaves draft/scheduled. GET
+>   `/api/campaigns/:id` now returns `segment_rules` so the builder reloads rules.
+> - **Field dropdown is schema-driven:** profile fields + the selected list's
+>   defined attributes (3.1 `attribute_schema`, shown by `label`) + any attribute
+>   a stored rule references that the list doesn't define + a free-text `Custom
+>   attribute…` fallback. The value input adapts to the attribute `type`
+>   (`select` → its options, `boolean` → true/false, `number`/`date` → typed
+>   inputs, `status` → status dropdown, else text).
+> - **Deviation from spec:** the roadmap says "apply as SQL WHERE"; implemented as
+>   shared in-app evaluation instead (rationale above).
+> - **Verified (2026-06-26, migrations now applied):**
+>   - Evaluator unit 14/14, schema unit 9/9.
+>   - **Dispatch live (real Supabase + worker, dry-run SES) 3/3:** seeded 6 contacts
+>     (incl. an unsubscribed one) → `city=Istanbul` ⇒ 3, `city=Istanbul AND
+>     plan=pro` ⇒ 1, no-segment ⇒ 5 (unsubscribed excluded by base eligibility).
+>   - **Preview + builder SSR live (real auth session) 11/11:** preview counts
+>     (5/3/1/4/5), 401 no-cookie, 400 bad listId, edit-page renders the segment
+>     section + reloads stored rules.
+>   - **Schema-driven dropdown live 5/5:** `GET /api/lists` returns
+>     `attribute_schema`; builder dropdown shows attribute labels (Company/Plan),
+>     a `select`-type attribute renders its options, stored `attributes.plan` rule
+>     resolves to the dropdown.
+>   - `pnpm typecheck`, worker `tsc`, `pnpm lint`, `pnpm build` all clean.
 
 ### 3.3 A/B testing (2 variants)
 - [ ] Schema: add `ab_variants` JSONB to `campaigns` — `[{ subject, html, design, weight }]`

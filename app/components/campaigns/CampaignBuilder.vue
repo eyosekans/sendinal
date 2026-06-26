@@ -1,6 +1,16 @@
 <script setup lang="ts">
 import type { CampaignDetail } from '~/types/campaign'
 import CampaignEditor from '~/components/campaigns/CampaignEditor.client.vue'
+import {
+  SEGMENT_PROFILE_FIELDS,
+  SEGMENT_OPERATORS,
+  SEGMENT_OPERATOR_LABELS,
+  SEGMENT_VALUE_OPERATORS,
+  segmentRulesSchema,
+  contactStatusSchema,
+  type SegmentOperator,
+  type AttributeField,
+} from '#shared/schemas'
 
 /**
  * Full-screen campaign builder (task 2.1). Top bar + left settings panel +
@@ -20,6 +30,7 @@ interface ListItem {
   id: string
   name: string
   contactCount: number
+  attribute_schema?: AttributeField[]
 }
 interface TemplateRow {
   id: string
@@ -62,6 +73,155 @@ const status = ref(existing?.status ?? 'draft')
 const locked = computed(
   () => status.value !== 'draft' && status.value !== 'scheduled',
 )
+
+/* ---------- segment builder (task 3.2) ---------- */
+// One editable row in the panel. `field` is a profile column, or 'custom' with
+// a typed `attributes.<customKey>`. `value` is always held as a string in the
+// UI and coerced by the shared evaluator.
+interface RuleRow {
+  field: string
+  customKey: string
+  operator: SegmentOperator
+  value: string
+}
+const statusOptions = contactStatusSchema.options
+
+// The selected list's custom-attribute definitions (task 3.1 list schema).
+const attributeFields = computed<AttributeField[]>(() => {
+  const l = lists.value?.find((x) => x.id === listId.value)
+  return Array.isArray(l?.attribute_schema) ? l.attribute_schema : []
+})
+function schemaKeysFor(lid: string | null): Set<string> {
+  const l = lists.value?.find((x) => x.id === lid)
+  const sch = Array.isArray(l?.attribute_schema) ? l.attribute_schema : []
+  return new Set(sch.map((f) => `attributes.${f.key}`))
+}
+
+function rowsFromStored(raw: unknown): RuleRow[] {
+  const parsed = segmentRulesSchema.safeParse(raw ?? {})
+  const stored = parsed.success ? parsed.data.rules : []
+  const known = schemaKeysFor(existing?.list_id ?? null)
+  return stored.map((r) => {
+    const isAttr = r.field.startsWith('attributes.')
+    // Attributes the list defines resolve to a dropdown option; unknown keys
+    // fall back to a free-text "Custom attribute…" row.
+    const useCustom = isAttr && !known.has(r.field)
+    return {
+      field: useCustom ? 'custom' : r.field,
+      customKey: useCustom ? r.field.slice('attributes.'.length) : '',
+      operator: r.operator,
+      value: r.value === undefined ? '' : String(r.value),
+    }
+  })
+}
+const rules = ref<RuleRow[]>(rowsFromStored(existing?.segment_rules))
+
+// Field dropdown: profile fields, then the list's defined attributes (by label),
+// then any attribute a rule already references but the list doesn't define, then
+// the free-text custom option.
+const fieldOptions = computed(() => {
+  const opts: { value: string; label: string }[] = SEGMENT_PROFILE_FIELDS.map(
+    (f) => ({ value: f.value, label: f.label }),
+  )
+  const seen = new Set<string>()
+  for (const f of attributeFields.value) {
+    const v = `attributes.${f.key}`
+    opts.push({ value: v, label: f.label })
+    seen.add(v)
+  }
+  for (const r of rules.value) {
+    if (r.field.startsWith('attributes.') && !seen.has(r.field)) {
+      seen.add(r.field)
+      opts.push({ value: r.field, label: r.field.slice('attributes.'.length) })
+    }
+  }
+  opts.push({ value: 'custom', label: 'Custom attribute…' })
+  return opts
+})
+
+// The attribute definition behind a row's field — drives the value input type.
+function attrFieldOf(field: string): AttributeField | null {
+  if (!field.startsWith('attributes.')) return null
+  const key = field.slice('attributes.'.length)
+  return attributeFields.value.find((f) => f.key === key) ?? null
+}
+
+function needsValue(op: SegmentOperator) {
+  return SEGMENT_VALUE_OPERATORS.includes(op)
+}
+function addRule() {
+  if (locked.value) return
+  rules.value.push({
+    field: 'email',
+    customKey: '',
+    operator: 'contains',
+    value: '',
+  })
+}
+function removeRule(i: number) {
+  if (locked.value) return
+  rules.value.splice(i, 1)
+}
+
+// Resolve UI rows into valid stored rules (drop incomplete ones so autosave and
+// preview never send a half-typed condition the schema would reject).
+const cleanRules = computed(() =>
+  rules.value
+    .map((r) => ({
+      field:
+        r.field === 'custom'
+          ? `attributes.${r.customKey.trim().replace(/[^A-Za-z0-9_-]/g, '')}`
+          : r.field,
+      operator: r.operator,
+      value: r.value,
+    }))
+    .filter((r) => {
+      if (r.field === 'attributes.') return false
+      return needsValue(r.operator) ? r.value.trim() !== '' : true
+    })
+    .map((r) =>
+      needsValue(r.operator)
+        ? { field: r.field, operator: r.operator, value: r.value.trim() }
+        : { field: r.field, operator: r.operator },
+    ),
+)
+
+/* ---------- segment preview count ---------- */
+const previewCount = ref<number | null>(null)
+const previewTotal = ref<number | null>(null)
+const previewLoading = ref(false)
+let previewTimer: ReturnType<typeof setTimeout> | undefined
+async function runPreview() {
+  if (!listId.value) {
+    previewCount.value = null
+    previewTotal.value = null
+    return
+  }
+  previewLoading.value = true
+  try {
+    const res = await $fetch<{ count: number; total: number }>(
+      '/api/segments/preview',
+      {
+        method: 'POST',
+        body: {
+          listId: listId.value,
+          rules: { match: 'all', rules: cleanRules.value },
+        },
+      },
+    )
+    previewCount.value = res.count
+    previewTotal.value = res.total
+  } catch {
+    previewCount.value = null
+    previewTotal.value = null
+  } finally {
+    previewLoading.value = false
+  }
+}
+function schedulePreview() {
+  clearTimeout(previewTimer)
+  previewTimer = setTimeout(runPreview, 400)
+}
 
 /* ---------- editor ---------- */
 const editor = ref<InstanceType<typeof CampaignEditor> | null>(null)
@@ -139,6 +299,7 @@ async function doSave() {
       ...(fromName.value.trim() ? { fromName: fromName.value.trim() } : {}),
       ...(fromEmail.value.trim() ? { fromEmail: fromEmail.value.trim() } : {}),
       ...(listId.value ? { listId: listId.value } : {}),
+      segmentRules: { match: 'all' as const, rules: cleanRules.value },
     }
 
     if (!campaignId.value) {
@@ -177,6 +338,10 @@ function onEditorChange() {
 
 // Field edits → autosave.
 watch([name, subject, fromName, fromEmail, listId], scheduleSave)
+// Segment edits → autosave; list/segment changes → re-estimate recipients.
+watch(rules, scheduleSave, { deep: true })
+watch([listId, cleanRules], schedulePreview, { deep: true })
+onMounted(runPreview)
 
 /* ---------- target list dropdown ---------- */
 const listOpen = ref(false)
@@ -543,6 +708,148 @@ const TOAST_COLOR = {
                   style="color: var(--primary-600)"
                 />
               </div>
+            </div>
+          </div>
+
+          <!-- Segment builder (task 3.2) -->
+          <div class="field">
+            <label class="field__label">Segment (optional)</label>
+
+            <p v-if="!rules.length" class="seg-hint">
+              Sends to the whole list. Add a condition to narrow it down.
+            </p>
+
+            <div
+              v-for="(row, i) in rules"
+              :key="i"
+              class="seg-rule"
+              :class="{ 'seg-rule--locked': locked }"
+            >
+              <select
+                v-model="row.field"
+                class="seg-input"
+                :disabled="locked"
+              >
+                <option
+                  v-for="o in fieldOptions"
+                  :key="o.value"
+                  :value="o.value"
+                >
+                  {{ o.label }}
+                </option>
+              </select>
+
+              <input
+                v-if="row.field === 'custom'"
+                v-model="row.customKey"
+                class="seg-input"
+                placeholder="attribute key (e.g. company)"
+                :disabled="locked"
+              />
+
+              <div class="seg-rule__row">
+                <select
+                  v-model="row.operator"
+                  class="seg-input"
+                  :disabled="locked"
+                >
+                  <option v-for="op in SEGMENT_OPERATORS" :key="op" :value="op">
+                    {{ SEGMENT_OPERATOR_LABELS[op] }}
+                  </option>
+                </select>
+
+                <template v-if="needsValue(row.operator)">
+                  <select
+                    v-if="row.field === 'status'"
+                    v-model="row.value"
+                    class="seg-input"
+                    :disabled="locked"
+                  >
+                    <option value="">Select…</option>
+                    <option v-for="s in statusOptions" :key="s" :value="s">
+                      {{ s }}
+                    </option>
+                  </select>
+                  <select
+                    v-else-if="attrFieldOf(row.field)?.type === 'select'"
+                    v-model="row.value"
+                    class="seg-input"
+                    :disabled="locked"
+                  >
+                    <option value="">Select…</option>
+                    <option
+                      v-for="o in attrFieldOf(row.field)?.options ?? []"
+                      :key="o"
+                      :value="o"
+                    >
+                      {{ o }}
+                    </option>
+                  </select>
+                  <select
+                    v-else-if="attrFieldOf(row.field)?.type === 'boolean'"
+                    v-model="row.value"
+                    class="seg-input"
+                    :disabled="locked"
+                  >
+                    <option value="">Select…</option>
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                  <input
+                    v-else-if="attrFieldOf(row.field)?.type === 'number'"
+                    v-model="row.value"
+                    type="number"
+                    class="seg-input"
+                    placeholder="value"
+                    :disabled="locked"
+                  />
+                  <input
+                    v-else-if="attrFieldOf(row.field)?.type === 'date'"
+                    v-model="row.value"
+                    type="date"
+                    class="seg-input"
+                    :disabled="locked"
+                  />
+                  <input
+                    v-else
+                    v-model="row.value"
+                    class="seg-input"
+                    placeholder="value"
+                    :disabled="locked"
+                  />
+                </template>
+
+                <button
+                  type="button"
+                  class="seg-del"
+                  :disabled="locked"
+                  title="Remove condition"
+                  @click="removeRule(i)"
+                >
+                  <i class="ph ph-x" />
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="seg-add"
+              :disabled="locked"
+              @click="addRule"
+            >
+              <i class="ph ph-plus" /> Add condition
+            </button>
+
+            <div v-if="listId" class="seg-preview">
+              <i class="ph ph-users-three" />
+              <span v-if="previewLoading" class="seg-preview__muted"
+                >Estimating…</span
+              >
+              <span v-else-if="previewCount !== null">
+                <strong>{{ previewCount.toLocaleString('en-US') }}</strong>
+                of {{ (previewTotal ?? 0).toLocaleString('en-US') }} recipients
+              </span>
+              <span v-else class="seg-preview__muted">—</span>
             </div>
           </div>
 
@@ -998,6 +1305,114 @@ const TOAST_COLOR = {
   height: 1px;
   background: var(--gray-100);
   margin: 22px 0;
+}
+
+/* segment builder (task 3.2) */
+.seg-hint {
+  font-size: 13px;
+  color: var(--gray-500);
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+.seg-rule {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  margin-bottom: 8px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: var(--gray-50);
+}
+.seg-rule--locked {
+  opacity: 0.7;
+}
+.seg-rule__row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.seg-input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--gray-800);
+  background: #fff;
+  outline: none;
+}
+.seg-input:focus {
+  border-color: var(--primary-600);
+  outline: 2px solid var(--primary-100);
+}
+.seg-input:disabled {
+  background: var(--gray-50);
+  color: var(--gray-400);
+  cursor: not-allowed;
+}
+.seg-del {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--gray-500);
+  cursor: pointer;
+}
+.seg-del:hover:not(:disabled) {
+  background: var(--gray-100);
+  color: var(--danger-600);
+}
+.seg-del:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.seg-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px dashed var(--gray-300, var(--gray-200));
+  border-radius: var(--radius-md);
+  background: #fff;
+  color: var(--primary-700, var(--primary-600));
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.seg-add:hover:not(:disabled) {
+  background: var(--primary-100);
+}
+.seg-add:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.seg-preview {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 9px 11px;
+  border-radius: var(--radius-md);
+  background: var(--primary-100);
+  color: var(--primary-800);
+  font-size: 13px;
+}
+.seg-preview strong {
+  font-weight: 600;
+}
+.seg-preview__muted {
+  color: var(--gray-500);
 }
 
 .select {
