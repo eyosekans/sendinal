@@ -6,11 +6,6 @@ import HealthDonut from '~/components/dashboard/HealthDonut.client.vue'
 
 useHead({ title: 'Dashboard — Sendinal' })
 
-const user = useSupabaseUser()
-const userInitials = computed(() =>
-  (user.value?.email ?? 'U').slice(0, 2).toUpperCase(),
-)
-
 const { data: stats } = await useFetch<DashboardStats>('/api/dashboard/stats')
 const { data: recentRes } = await useFetch('/api/campaigns', {
   query: { limit: 5, sort: 'createdAt', dir: 'desc' },
@@ -126,35 +121,13 @@ const axisLabels = computed(() => {
 
 const health = computed(() => stats.value?.health)
 
-function newCampaign() {
-  navigateTo('/campaigns/new')
-}
+const { search, placeholder } = useTopbar()
+search.value = ''
+placeholder.value = 'Search campaigns, contacts…'
 </script>
 
 <template>
   <div class="page">
-    <!-- top bar -->
-    <div class="topbar">
-      <div class="search">
-        <i class="ph ph-magnifying-glass search__icon" />
-        <input class="search__input" placeholder="Search campaigns, contacts…" />
-        <span class="search__kbd">⌘K</span>
-      </div>
-      <div class="topbar__right">
-        <button type="button" class="icon-btn" title="Notifications">
-          <i class="ph ph-bell" />
-          <span class="icon-btn__dot" />
-        </button>
-        <button type="button" class="icon-btn" title="Help">
-          <i class="ph ph-question" />
-        </button>
-        <button type="button" class="btn-primary" @click="newCampaign">
-          <i class="ph ph-plus" /> New Campaign
-        </button>
-        <div class="avatar-me">{{ userInitials }}</div>
-      </div>
-    </div>
-
     <!-- scroll area -->
     <div class="scroll">
       <div class="content">
@@ -287,130 +260,6 @@ function newCampaign() {
 <style scoped>
 .page {
   display: contents;
-}
-
-/* top bar */
-.topbar {
-  height: 64px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 28px;
-  border-bottom: 1px solid var(--gray-200);
-  background: var(--gray-50);
-}
-.search {
-  position: relative;
-  width: 340px;
-  max-width: 36vw;
-}
-.search__icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 16px;
-  color: var(--gray-400);
-}
-.search__input {
-  width: 100%;
-  height: 38px;
-  padding: 0 40px 0 34px;
-  border: 1px solid var(--gray-200);
-  border-radius: 8px;
-  background: #fff;
-  font-family: var(--font-body);
-  font-size: 13.5px;
-  color: var(--gray-800);
-  outline: none;
-}
-.search__input:focus {
-  border-color: var(--primary-600);
-  outline: 2px solid var(--primary-100);
-}
-.search__kbd {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 10px;
-  color: var(--gray-400);
-  border: 1px solid var(--gray-200);
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-family: var(--font-mono);
-}
-.topbar__right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.icon-btn {
-  position: relative;
-  width: 38px;
-  height: 38px;
-  border: none;
-  background: transparent;
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--gray-600);
-}
-.icon-btn:hover {
-  background: var(--gray-100);
-}
-.icon-btn .ph {
-  font-size: 20px;
-}
-.icon-btn__dot {
-  position: absolute;
-  top: 8px;
-  right: 9px;
-  width: 7px;
-  height: 7px;
-  border-radius: var(--radius-full);
-  background: var(--danger-600);
-  border: 1.5px solid var(--gray-50);
-}
-.btn-primary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  height: 38px;
-  padding: 0 16px;
-  background: var(--primary-600);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-family: var(--font-body);
-  font-size: 13.5px;
-  font-weight: 500;
-  box-shadow: 0 1px 2px rgba(15, 82, 71, 0.25);
-  transition: background-color 100ms ease;
-}
-.btn-primary:hover {
-  background: var(--primary-800);
-}
-.btn-primary .ph {
-  font-size: 16px;
-}
-.avatar-me {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-full);
-  background: linear-gradient(135deg, var(--primary-400), var(--primary-600));
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: 13px;
 }
 
 /* scroll + content */

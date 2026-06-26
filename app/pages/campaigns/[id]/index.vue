@@ -13,11 +13,6 @@ import EngagementLineChart from '~/components/dashboard/EngagementLineChart.clie
 const route = useRoute()
 const id = route.params.id as string
 
-const user = useSupabaseUser()
-const userInitials = computed(() =>
-  (user.value?.email ?? 'U').slice(0, 2).toUpperCase(),
-)
-
 const { data: campaign, error: campaignError, refresh: refreshCampaign } =
   await useFetch<CampaignDetail>(`/api/campaigns/${id}`)
 const { data: stats } = await useFetch<CampaignStats>(
@@ -47,6 +42,10 @@ useHead({
     campaign.value ? `${campaign.value.name} — Sendinal` : 'Campaign — Sendinal',
   ),
 })
+
+const { search, placeholder } = useTopbar()
+search.value = ''
+placeholder.value = 'Search campaigns, contacts…'
 
 const notFound = computed(() => campaignError.value?.statusCode === 404)
 const canEdit = computed(
@@ -190,17 +189,6 @@ const actMeta = (s: string) => ACT[s] ?? ACT.delivered!
 
 <template>
   <div class="page">
-    <!-- top bar -->
-    <div class="topbar">
-      <div class="search">
-        <i class="ph ph-magnifying-glass search__icon" />
-        <input class="search__input" placeholder="Search campaigns, contacts…" />
-      </div>
-      <div class="topbar__right">
-        <div class="avatar-me">{{ userInitials }}</div>
-      </div>
-    </div>
-
     <div class="scroll">
       <div class="content">
         <!-- not found -->
@@ -424,63 +412,6 @@ const actMeta = (s: string) => ACT[s] ?? ACT.delivered!
 <style scoped>
 .page {
   display: contents;
-}
-
-/* top bar */
-.topbar {
-  height: 64px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 28px;
-  border-bottom: 1px solid var(--gray-200);
-  background: var(--gray-50);
-}
-.search {
-  position: relative;
-  width: 420px;
-  max-width: 42vw;
-}
-.search__icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 16px;
-  color: var(--gray-400);
-}
-.search__input {
-  width: 100%;
-  height: 38px;
-  padding: 0 12px 0 36px;
-  border: 1px solid var(--gray-200);
-  border-radius: 8px;
-  background: #fff;
-  font-family: var(--font-body);
-  font-size: 14px;
-  color: var(--gray-800);
-  outline: none;
-}
-.search__input:focus {
-  border-color: var(--primary-600);
-  outline: 2px solid var(--primary-100);
-}
-.topbar__right {
-  margin-left: auto;
-}
-.avatar-me {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-full);
-  background: linear-gradient(135deg, var(--primary-400), var(--primary-800));
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: 13px;
 }
 
 /* scroll + content */

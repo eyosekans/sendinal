@@ -24,6 +24,10 @@ export default defineNuxtConfig({
           rel: 'stylesheet',
           href: 'https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css',
         },
+        {
+          rel: 'stylesheet',
+          href: 'https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css',
+        },
       ],
     },
   },

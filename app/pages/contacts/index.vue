@@ -11,15 +11,14 @@ import ConfirmDeleteModal from '~/components/ConfirmDeleteModal.vue'
 
 useHead({ title: 'Contacts — Sendinal' })
 
-const user = useSupabaseUser()
-const userInitials = computed(() =>
-  (user.value?.email ?? 'U').slice(0, 2).toUpperCase(),
-)
+// Shared layout top bar drives the search query.
+const { search: searchInput, placeholder } = useTopbar()
+searchInput.value = ''
+placeholder.value = 'Search contacts by name or email…'
 
 /* ---------- query state ---------- */
 const LIMIT = 25
 const page = ref(1)
-const searchInput = ref('')
 const debouncedSearch = ref('')
 const tab = ref<'all' | ContactStatus>('all')
 const selectedListId = ref<string | null>(null)
@@ -301,21 +300,6 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
 
 <template>
   <div class="page">
-    <!-- top utility bar -->
-    <div class="topbar">
-      <div class="search">
-        <i class="ph ph-magnifying-glass search__icon" />
-        <input
-          v-model="searchInput"
-          class="search__input"
-          placeholder="Search contacts by name or email…"
-        />
-      </div>
-      <div class="topbar__right">
-        <div class="avatar-me">{{ userInitials }}</div>
-      </div>
-    </div>
-
     <!-- lists panel + main column -->
     <div class="body">
       <ListsPanel
@@ -545,70 +529,6 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
    were direct flex children of the layout's <main>. */
 .page {
   display: contents;
-}
-
-/* top utility bar */
-.topbar {
-  height: 64px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 28px;
-  border-bottom: 1px solid var(--gray-200);
-  background: var(--gray-50);
-}
-.search {
-  position: relative;
-  flex: 1;
-  max-width: 420px;
-}
-.search__icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 16px;
-  color: var(--gray-400);
-}
-.search__input {
-  width: 100%;
-  height: 36px;
-  padding: 0 12px 0 34px;
-  border: 1px solid var(--gray-200);
-  border-radius: var(--radius-md);
-  background: #fff;
-  font-family: var(--font-body);
-  font-size: 14px;
-  color: var(--gray-800);
-  outline: none;
-}
-.search__input::placeholder {
-  color: var(--gray-400);
-}
-.search__input:focus {
-  border-color: var(--primary-600);
-  outline: 2px solid var(--primary-100);
-  outline-offset: 0;
-}
-.topbar__right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.avatar-me {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-full);
-  background: var(--primary-600);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: 13px;
 }
 
 /* body: lists panel + main column */
