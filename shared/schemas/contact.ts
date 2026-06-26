@@ -41,14 +41,52 @@ export const listContactsQuerySchema = z.object({
 })
 export type ListContactsQuery = z.infer<typeof listContactsQuerySchema>
 
+/** Loose email format check (matches the wizard's client-side validation). */
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** How to handle a row whose email already exists. */
+export const duplicateStrategySchema = z.enum(['update', 'skip'])
+export type DuplicateStrategy = z.infer<typeof duplicateStrategySchema>
+
 /**
- * Bulk contact import (POST /api/contacts/import). The UI parses the CSV and
- * maps columns client-side, then posts the rows here. Existing emails are
- * updated (and soft-deleted ones restored); optionally all rows are added to
- * `listId`.
+ * One row in a bulk import. Email is normally format-validated, but a row may
+ * carry `emailUnverified: true` (the wizard's "import anyway and flag" option),
+ * in which case a malformed address is allowed through and stored flagged.
+ */
+export const importContactSchema = z
+  .object({
+    email: z.string().trim().toLowerCase().min(1).max(320),
+    firstName: z.string().trim().min(1).optional(),
+    lastName: z.string().trim().min(1).optional(),
+    attributes: z.record(z.string(), z.unknown()).default({}),
+    emailUnverified: z.boolean().default(false),
+  })
+  .superRefine((c, ctx) => {
+    if (!c.emailUnverified && !EMAIL_RE.test(c.email)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['email'],
+        message: 'Invalid email address',
+      })
+    }
+  })
+export type ImportContactInput = z.infer<typeof importContactSchema>
+
+/**
+ * Bulk contact import (POST /api/contacts/import). The wizard parses the CSV,
+ * maps columns, and validates rows client-side, then posts the importable rows
+ * here. `duplicateStrategy` decides what happens to emails that already exist;
+ * if `listId` is given, every imported/updated contact is added to that list.
  */
 export const importContactsSchema = z.object({
   listId: z.string().uuid().optional(),
-  contacts: z.array(createContactSchema).min(1).max(10000),
+  duplicateStrategy: duplicateStrategySchema.default('update'),
+  contacts: z.array(importContactSchema).min(1).max(10000),
 })
 export type ImportContactsInput = z.infer<typeof importContactsSchema>
+
+/** Body for POST /api/contacts/import-check — dry-run new vs existing split. */
+export const importCheckSchema = z.object({
+  emails: z.array(z.string().trim().toLowerCase().min(1)).min(1).max(10000),
+})
+export type ImportCheckInput = z.infer<typeof importCheckSchema>

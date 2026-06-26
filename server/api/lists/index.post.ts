@@ -1,5 +1,5 @@
 import { serverSupabaseClient } from '#supabase/server'
-import type { Database } from '~~/app/types/database.types'
+import type { Database, Json } from '~~/app/types/database.types'
 import { createListSchema } from '#shared/schemas'
 
 /**
@@ -24,6 +24,7 @@ export default defineEventHandler(async (event) => {
     .insert({
       name: parsed.data.name,
       description: parsed.data.description ?? null,
+      attribute_schema: parsed.data.attributeSchema as Json,
     })
     .select()
     .single()

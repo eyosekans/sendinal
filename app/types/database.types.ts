@@ -47,6 +47,7 @@ export interface Database {
           last_name: string | null
           attributes: Json
           status: ContactStatus
+          email_unverified: boolean
           created_at: string
           updated_at: string
           deleted_at: string | null
@@ -58,6 +59,7 @@ export interface Database {
           last_name?: string | null
           attributes?: Json
           status?: ContactStatus
+          email_unverified?: boolean
           created_at?: string
           updated_at?: string
           deleted_at?: string | null
@@ -69,6 +71,7 @@ export interface Database {
           last_name?: string | null
           attributes?: Json
           status?: ContactStatus
+          email_unverified?: boolean
           created_at?: string
           updated_at?: string
           deleted_at?: string | null
@@ -80,18 +83,21 @@ export interface Database {
           id: string
           name: string
           description: string | null
+          attribute_schema: Json
           created_at: string
         }
         Insert: {
           id?: string
           name: string
           description?: string | null
+          attribute_schema?: Json
           created_at?: string
         }
         Update: {
           id?: string
           name?: string
           description?: string | null
+          attribute_schema?: Json
           created_at?: string
         }
         Relationships: []

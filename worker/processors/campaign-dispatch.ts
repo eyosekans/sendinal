@@ -57,6 +57,7 @@ export async function processCampaignDispatch(job: Job) {
     .select('id, email')
     .in('id', memberIds)
     .eq('status', 'active')
+    .eq('email_unverified', false)
     .is('deleted_at', null)
   if (ctErr) throw ctErr
 

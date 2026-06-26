@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import type { Contact } from '~/types/contact'
+import type { AttributeField } from '~/types/list'
 import type { ContactStatus } from '#shared/schemas'
 
-const props = defineProps<{
-  open: boolean
-  mode: 'create' | 'edit'
-  contact: Contact | null
-}>()
+const props = withDefaults(
+  defineProps<{
+    open: boolean
+    mode: 'create' | 'edit'
+    contact: Contact | null
+    /** Attribute fields to render in create mode (from the selected list). */
+    schemaFields?: AttributeField[]
+  }>(),
+  { schemaFields: () => [] },
+)
 const emit = defineEmits<{ close: []; saved: [] }>()
 
 const STATUS_OPTIONS: ContactStatus[] = [
@@ -22,13 +28,41 @@ const form = reactive({
   lastName: '',
   status: 'active' as ContactStatus,
 })
+
+/** Custom-attribute state. `fields` are schema-defined; `extras` are ad-hoc
+ *  key/value pairs (existing keys not in the schema, plus user-added ones). */
+const fields = ref<AttributeField[]>([])
+const attrValues = ref<Record<string, string | boolean>>({})
+const extras = ref<{ key: string; value: string }[]>([])
+const schemaLoading = ref(false)
+
 const loading = ref(false)
 const error = ref('')
 
-// Reset the form each time the modal opens.
+function resetAttrs() {
+  attrValues.value = {}
+  extras.value = []
+}
+
+/** Seed attrValues + extras from a contact's stored attributes given the schema. */
+function seedFromContact(attrs: Record<string, unknown>, schema: AttributeField[]) {
+  resetAttrs()
+  const known = new Set(schema.map((f) => f.key))
+  for (const f of schema) {
+    const v = attrs[f.key]
+    if (f.type === 'boolean')
+      attrValues.value[f.key] = v === true || v === 'true'
+    else attrValues.value[f.key] = v === undefined || v === null ? '' : String(v)
+  }
+  for (const [k, v] of Object.entries(attrs)) {
+    if (known.has(k)) continue
+    extras.value.push({ key: k, value: v === null || v === undefined ? '' : String(v) })
+  }
+}
+
 watch(
   () => props.open,
-  (open) => {
+  async (open) => {
     if (!open) return
     error.value = ''
     if (props.mode === 'edit' && props.contact) {
@@ -36,11 +70,34 @@ watch(
       form.firstName = props.contact.first_name ?? ''
       form.lastName = props.contact.last_name ?? ''
       form.status = props.contact.status
+      const attrs = (props.contact.attributes ?? {}) as Record<string, unknown>
+      // Seed immediately from any keys already present, then refine with the
+      // union schema across the contact's lists.
+      fields.value = []
+      seedFromContact(attrs, [])
+      schemaLoading.value = true
+      try {
+        const res = await $fetch<{ fields: AttributeField[] }>(
+          `/api/contacts/${props.contact.id}/attribute-schema`,
+        )
+        fields.value = res.fields
+        seedFromContact(attrs, res.fields)
+      } catch {
+        // Non-fatal: fall back to ad-hoc fields for whatever keys exist.
+        fields.value = []
+      } finally {
+        schemaLoading.value = false
+      }
     } else {
       form.email = ''
       form.firstName = ''
       form.lastName = ''
       form.status = 'active'
+      fields.value = props.schemaFields
+      resetAttrs()
+      for (const f of props.schemaFields) {
+        attrValues.value[f.key] = f.type === 'boolean' ? false : ''
+      }
     }
   },
 )
@@ -48,6 +105,38 @@ watch(
 const title = computed(() =>
   props.mode === 'edit' ? 'Edit contact' : 'Add contact',
 )
+
+function addExtra() {
+  extras.value.push({ key: '', value: '' })
+}
+function removeExtra(i: number) {
+  extras.value.splice(i, 1)
+}
+
+function buildAttributes(): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const f of fields.value) {
+    const v = attrValues.value[f.key]
+    if (f.type === 'boolean') {
+      if (v === true) out[f.key] = true
+    } else if (f.type === 'number') {
+      const s = String(v ?? '').trim()
+      if (s !== '') {
+        const n = Number(s)
+        out[f.key] = Number.isFinite(n) ? n : s
+      }
+    } else {
+      const s = String(v ?? '').trim()
+      if (s !== '') out[f.key] = s
+    }
+  }
+  for (const { key, value } of extras.value) {
+    const k = key.trim()
+    const val = value.trim()
+    if (k && val) out[k] = val
+  }
+  return out
+}
 
 async function submit() {
   error.value = ''
@@ -61,6 +150,7 @@ async function submit() {
     email,
     firstName: form.firstName.trim() || undefined,
     lastName: form.lastName.trim() || undefined,
+    attributes: buildAttributes(),
     ...(props.mode === 'edit' ? { status: form.status } : {}),
   }
 
@@ -152,6 +242,71 @@ async function submit() {
               </select>
             </div>
 
+            <!-- Custom attributes -->
+            <div
+              v-if="fields.length || extras.length || mode === 'edit'"
+              class="attrs"
+            >
+              <div class="attrs__title">Custom attributes</div>
+
+              <div
+                v-for="f in fields"
+                :key="f.key"
+                class="field"
+              >
+                <label class="field__label">{{ f.label }}</label>
+                <select
+                  v-if="f.type === 'select'"
+                  v-model="attrValues[f.key]"
+                  class="input"
+                >
+                  <option value="">—</option>
+                  <option v-for="o in f.options ?? []" :key="o" :value="o">
+                    {{ o }}
+                  </option>
+                </select>
+                <label v-else-if="f.type === 'boolean'" class="toggle">
+                  <input v-model="attrValues[f.key]" type="checkbox" />
+                  <span>{{ attrValues[f.key] ? 'Yes' : 'No' }}</span>
+                </label>
+                <input
+                  v-else
+                  v-model="attrValues[f.key]"
+                  :type="f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'"
+                  class="input"
+                  :placeholder="f.label"
+                />
+              </div>
+
+              <!-- Ad-hoc attributes -->
+              <div v-for="(ex, i) in extras" :key="`ex-${i}`" class="extra-row">
+                <input
+                  v-model="ex.key"
+                  type="text"
+                  class="input input--sm input--mono"
+                  placeholder="key"
+                />
+                <input
+                  v-model="ex.value"
+                  type="text"
+                  class="input input--sm"
+                  placeholder="value"
+                />
+                <button
+                  type="button"
+                  class="extra-remove"
+                  aria-label="Remove field"
+                  @click="removeExtra(i)"
+                >
+                  <i class="ph ph-x" />
+                </button>
+              </div>
+
+              <button type="button" class="attr-add" @click="addExtra">
+                <i class="ph ph-plus" /> Add custom field
+              </button>
+            </div>
+
             <p v-if="error" class="error">{{ error }}</p>
           </div>
 
@@ -186,10 +341,14 @@ async function submit() {
   justify-content: center;
   z-index: 50;
   animation: dc-overlayin 120ms ease;
+  padding: 24px;
 }
 .modal {
   width: 480px;
-  max-width: calc(100vw - 48px);
+  max-width: 100%;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
   background: #fff;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-elevated);
@@ -197,6 +356,7 @@ async function submit() {
   overflow: hidden;
 }
 .modal__header {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -232,6 +392,7 @@ async function submit() {
 
 .modal__body {
   padding: 24px;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -268,6 +429,10 @@ async function submit() {
   font-family: var(--font-mono);
   font-size: 13px;
 }
+.input--sm {
+  height: 34px;
+  font-size: 13px;
+}
 .input::placeholder {
   color: var(--gray-400);
 }
@@ -280,6 +445,83 @@ select.input {
   appearance: none;
   cursor: pointer;
 }
+
+.attrs {
+  border-top: 1px solid var(--gray-100);
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.attrs__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gray-700);
+}
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--gray-700);
+  cursor: pointer;
+}
+.toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary-600);
+  cursor: pointer;
+}
+.extra-row {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr 32px;
+  gap: 8px;
+  align-items: center;
+}
+.extra-remove {
+  width: 32px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: #fff;
+  color: var(--gray-500);
+  cursor: pointer;
+}
+.extra-remove:hover {
+  background: var(--danger-100);
+  border-color: var(--danger-100);
+  color: var(--danger-600);
+}
+.extra-remove .ph {
+  font-size: 14px;
+}
+.attr-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px dashed var(--gray-300);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--gray-600);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.attr-add:hover {
+  border-color: var(--primary-600);
+  color: var(--primary-600);
+}
+.attr-add .ph {
+  font-size: 14px;
+}
+
 .error {
   margin: 0;
   font-size: 13px;
@@ -287,6 +529,7 @@ select.input {
 }
 
 .modal__footer {
+  flex: none;
   display: flex;
   justify-content: flex-end;
   gap: 8px;

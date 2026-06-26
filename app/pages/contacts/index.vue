@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import type { Contact } from '~/types/contact'
+import type { List } from '~/types/list'
 import type { ContactStatus } from '#shared/schemas'
 import ContactStatusBadge from '~/components/contacts/ContactStatusBadge.vue'
 import ContactFormModal from '~/components/contacts/ContactFormModal.vue'
+import ListsPanel from '~/components/contacts/ListsPanel.vue'
+import ListFormModal from '~/components/contacts/ListFormModal.vue'
+import ImportWizardModal from '~/components/contacts/ImportWizardModal.vue'
 import ConfirmDeleteModal from '~/components/ConfirmDeleteModal.vue'
 
 useHead({ title: 'Contacts — Sendinal' })
@@ -18,12 +22,14 @@ const page = ref(1)
 const searchInput = ref('')
 const debouncedSearch = ref('')
 const tab = ref<'all' | ContactStatus>('all')
+const selectedListId = ref<string | null>(null)
 
 const listQuery = computed(() => ({
   page: page.value,
   limit: LIMIT,
   ...(debouncedSearch.value ? { search: debouncedSearch.value } : {}),
   ...(tab.value !== 'all' ? { status: tab.value } : {}),
+  ...(selectedListId.value ? { listId: selectedListId.value } : {}),
 }))
 
 const {
@@ -46,9 +52,17 @@ const { data: stats, refresh: refreshStats } = await useFetch(
     }),
   },
 )
+const { data: listsRaw, refresh: refreshLists } = await useFetch('/api/lists', {
+  default: () => [] as List[],
+})
 
 const contacts = computed(() => (list.value?.data ?? []) as Contact[])
 const total = computed(() => list.value?.total ?? 0)
+const lists = computed(() => (listsRaw.value ?? []) as List[])
+const selectedList = computed(
+  () => lists.value.find((l) => l.id === selectedListId.value) ?? null,
+)
+const headerTitle = computed(() => selectedList.value?.name ?? 'All Contacts')
 
 /* ---------- search (debounced) ---------- */
 let searchTimer: ReturnType<typeof setTimeout> | undefined
@@ -60,6 +74,14 @@ watch(searchInput, (v) => {
     clearSelection()
   }, 300)
 })
+
+/* ---------- list selection ---------- */
+function selectList(id: string | null) {
+  if (selectedListId.value === id) return
+  selectedListId.value = id
+  page.value = 1
+  clearSelection()
+}
 
 /* ---------- tabs ---------- */
 const TABS: { key: 'all' | ContactStatus; label: string }[] = [
@@ -151,10 +173,11 @@ function formatDate(iso: string | null) {
   })
 }
 
-/* ---------- create / edit modal ---------- */
+/* ---------- contact create / edit modal ---------- */
 const formOpen = ref(false)
 const formMode = ref<'create' | 'edit'>('create')
 const formContact = ref<Contact | null>(null)
+const createSchemaFields = computed(() => selectedList.value?.attribute_schema ?? [])
 function openCreate() {
   formMode.value = 'create'
   formContact.value = null
@@ -167,10 +190,57 @@ function openEdit(c: Contact) {
 }
 async function onSaved() {
   formOpen.value = false
-  await Promise.all([refresh(), refreshStats()])
+  await Promise.all([refresh(), refreshStats(), refreshLists()])
 }
 
-/* ---------- delete modal ---------- */
+/* ---------- list create / edit modal ---------- */
+const listFormOpen = ref(false)
+const listFormMode = ref<'create' | 'edit'>('create')
+const listFormTarget = ref<List | null>(null)
+function openCreateList() {
+  listFormMode.value = 'create'
+  listFormTarget.value = null
+  listFormOpen.value = true
+}
+function openEditList(l: List) {
+  listFormMode.value = 'edit'
+  listFormTarget.value = l
+  listFormOpen.value = true
+}
+async function onListSaved() {
+  listFormOpen.value = false
+  await refreshLists()
+}
+
+/* ---------- list delete ---------- */
+const listDeleteTarget = ref<List | null>(null)
+const deletingList = ref(false)
+function askDeleteList(l: List) {
+  listDeleteTarget.value = l
+}
+async function confirmDeleteList() {
+  const l = listDeleteTarget.value
+  if (!l) return
+  deletingList.value = true
+  try {
+    await $fetch(`/api/lists/${l.id}`, { method: 'DELETE' })
+    if (selectedListId.value === l.id) selectList(null)
+    listDeleteTarget.value = null
+    await refreshLists()
+  } finally {
+    deletingList.value = false
+  }
+}
+
+/* ---------- CSV import wizard ---------- */
+const importOpen = ref(false)
+// The wizard emits `imported` when the run completes but keeps itself open on its
+// Results step — refresh data in the background without closing.
+async function onImported() {
+  await Promise.all([refresh(), refreshStats(), refreshLists()])
+}
+
+/* ---------- contact delete modal ---------- */
 const deleteTarget = ref<{
   type: 'single' | 'bulk'
   id?: string
@@ -219,7 +289,7 @@ async function confirmDelete() {
     }
     deleteTarget.value = null
     clearSelection()
-    await Promise.all([refresh(), refreshStats()])
+    await Promise.all([refresh(), refreshStats(), refreshLists()])
     if (contacts.value.length === 0 && page.value > 1) page.value--
   } finally {
     deleting.value = false
@@ -246,153 +316,180 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
       </div>
     </div>
 
-    <!-- scroll area -->
-    <div class="scroll">
-      <div class="content">
-        <!-- page header -->
-        <div class="header">
-          <div>
-            <div class="header__crumb">Contacts</div>
-            <h1 class="header__title">All Contacts</h1>
-            <div class="header__sub">{{ total }} contacts</div>
-          </div>
-          <button type="button" class="btn-primary" @click="openCreate">
-            <i class="ph ph-user-plus" /> Add Contact
-          </button>
-        </div>
+    <!-- lists panel + main column -->
+    <div class="body">
+      <ListsPanel
+        :lists="lists"
+        :selected-list-id="selectedListId"
+        :total-count="tabCount('all')"
+        @select="selectList"
+        @create="openCreateList"
+        @edit="openEditList"
+        @remove="askDeleteList"
+      />
 
-        <!-- status tabs -->
-        <div class="tabs">
-          <button
-            v-for="t in TABS"
-            :key="t.key"
-            type="button"
-            class="tab"
-            :class="{ 'tab--active': tab === t.key }"
-            @click="setTab(t.key)"
-          >
-            {{ t.label }}
-            <span
-              class="tab__count"
-              :class="{ 'tab__count--active': tab === t.key }"
-            >
-              {{ tabCount(t.key) }}
-            </span>
-          </button>
-        </div>
-
-        <!-- selection bar -->
-        <div v-if="selectedCount > 0" class="selbar">
-          <span class="selbar__count">{{ selectedCount }} selected</span>
-          <div class="selbar__div" />
-          <button
-            type="button"
-            class="selbar__btn selbar__btn--danger"
-            @click="askDeleteBulk"
-          >
-            <i class="ph ph-trash" /> Delete
-          </button>
-          <button
-            type="button"
-            class="selbar__btn selbar__clear"
-            @click="clearSelection"
-          >
-            Clear
-          </button>
-        </div>
-
-        <!-- table -->
-        <div class="table" :class="{ 'table--loading': pending }">
-          <!-- header -->
-          <div class="trow thead">
-            <div class="cell-check" @click="toggleAll">
-              <div class="check" :class="{ 'check--on': allChecked }">
-                <i v-if="allChecked" class="ph ph-check" />
+      <div class="main-col">
+        <div class="scroll">
+          <div class="content">
+            <!-- page header -->
+            <div class="header">
+              <div>
+                <div class="header__crumb">Contacts</div>
+                <h1 class="header__title">{{ headerTitle }}</h1>
+                <div class="header__sub">
+                  {{ selectedList ? selectedList.contactCount : total }} contacts
+                </div>
+              </div>
+              <div class="header__actions">
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  @click="importOpen = true"
+                >
+                  <i class="ph ph-download-simple" /> Import CSV
+                </button>
+                <button type="button" class="btn-primary" @click="openCreate">
+                  <i class="ph ph-user-plus" /> Add Contact
+                </button>
               </div>
             </div>
-            <div>Contact</div>
-            <div>Email</div>
-            <div>Status</div>
-            <div>Last Opened</div>
-            <div>Date Added</div>
-            <div class="ta-right">Actions</div>
-          </div>
 
-          <!-- body -->
-          <div
-            v-for="c in contacts"
-            :key="c.id"
-            class="trow tbody"
-            :class="{ 'trow--selected': isSelected(c.id) }"
-          >
-            <div class="cell-check" @click="toggleRow(c.id)">
-              <div class="check" :class="{ 'check--on': isSelected(c.id) }">
-                <i v-if="isSelected(c.id)" class="ph ph-check" />
-              </div>
+            <!-- status tabs -->
+            <div class="tabs">
+              <button
+                v-for="t in TABS"
+                :key="t.key"
+                type="button"
+                class="tab"
+                :class="{ 'tab--active': tab === t.key }"
+                @click="setTab(t.key)"
+              >
+                {{ t.label }}
+                <span
+                  class="tab__count"
+                  :class="{ 'tab__count--active': tab === t.key }"
+                >
+                  {{ tabCount(t.key) }}
+                </span>
+              </button>
             </div>
-            <div class="cell-contact">
+
+            <!-- selection bar -->
+            <div v-if="selectedCount > 0" class="selbar">
+              <span class="selbar__count">{{ selectedCount }} selected</span>
+              <div class="selbar__div" />
+              <button
+                type="button"
+                class="selbar__btn selbar__btn--danger"
+                @click="askDeleteBulk"
+              >
+                <i class="ph ph-trash" /> Delete
+              </button>
+              <button
+                type="button"
+                class="selbar__btn selbar__clear"
+                @click="clearSelection"
+              >
+                Clear
+              </button>
+            </div>
+
+            <!-- table -->
+            <div class="table" :class="{ 'table--loading': pending }">
+              <!-- header -->
+              <div class="trow thead">
+                <div class="cell-check" @click="toggleAll">
+                  <div class="check" :class="{ 'check--on': allChecked }">
+                    <i v-if="allChecked" class="ph ph-check" />
+                  </div>
+                </div>
+                <div>Contact</div>
+                <div>Email</div>
+                <div>Status</div>
+                <div>Last Opened</div>
+                <div>Date Added</div>
+                <div class="ta-right">Actions</div>
+              </div>
+
+              <!-- body -->
               <div
-                class="avatar"
-                :style="{ background: palette(c).bg, color: palette(c).fg }"
+                v-for="c in contacts"
+                :key="c.id"
+                class="trow tbody"
+                :class="{ 'trow--selected': isSelected(c.id) }"
               >
-                {{ initials(c) }}
+                <div class="cell-check" @click="toggleRow(c.id)">
+                  <div class="check" :class="{ 'check--on': isSelected(c.id) }">
+                    <i v-if="isSelected(c.id)" class="ph ph-check" />
+                  </div>
+                </div>
+                <div class="cell-contact">
+                  <div
+                    class="avatar"
+                    :style="{ background: palette(c).bg, color: palette(c).fg }"
+                  >
+                    {{ initials(c) }}
+                  </div>
+                  <span class="cell-name">{{ displayName(c) }}</span>
+                </div>
+                <div class="cell-email">{{ c.email }}</div>
+                <div><ContactStatusBadge :status="c.status" /></div>
+                <div class="cell-muted">—</div>
+                <div class="cell-muted">{{ formatDate(c.created_at) }}</div>
+                <div class="cell-actions">
+                  <button
+                    type="button"
+                    class="icon-act"
+                    aria-label="Edit"
+                    @click="openEdit(c)"
+                  >
+                    <i class="ph ph-pencil-simple" />
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-act icon-act--danger"
+                    aria-label="Delete"
+                    @click="askDeleteSingle(c)"
+                  >
+                    <i class="ph ph-trash" />
+                  </button>
+                </div>
               </div>
-              <span class="cell-name">{{ displayName(c) }}</span>
-            </div>
-            <div class="cell-email">{{ c.email }}</div>
-            <div><ContactStatusBadge :status="c.status" /></div>
-            <div class="cell-muted">—</div>
-            <div class="cell-muted">{{ formatDate(c.created_at) }}</div>
-            <div class="cell-actions">
-              <button
-                type="button"
-                class="icon-act"
-                aria-label="Edit"
-                @click="openEdit(c)"
-              >
-                <i class="ph ph-pencil-simple" />
-              </button>
-              <button
-                type="button"
-                class="icon-act icon-act--danger"
-                aria-label="Delete"
-                @click="askDeleteSingle(c)"
-              >
-                <i class="ph ph-trash" />
-              </button>
-            </div>
-          </div>
 
-          <!-- empty -->
-          <div v-if="isEmpty" class="empty">
-            <div class="empty__icon"><i class="ph ph-magnifying-glass" /></div>
-            <div class="empty__title">No contacts match your filters</div>
-            <div class="empty__desc">
-              Try a different status tab or clear your search to see everyone in
-              your contacts.
-            </div>
-          </div>
+              <!-- empty -->
+              <div v-if="isEmpty" class="empty">
+                <div class="empty__icon">
+                  <i class="ph ph-magnifying-glass" />
+                </div>
+                <div class="empty__title">No contacts match your filters</div>
+                <div class="empty__desc">
+                  Try a different status tab or clear your search to see everyone
+                  in your contacts.
+                </div>
+              </div>
 
-          <!-- footer -->
-          <div v-if="!isEmpty" class="tfoot">
-            <span class="tfoot__text">{{ footerText }}</span>
-            <div class="tfoot__nav">
-              <button
-                type="button"
-                class="pager"
-                :disabled="!canPrev"
-                @click="prevPage"
-              >
-                <i class="ph ph-caret-left" /> Previous
-              </button>
-              <button
-                type="button"
-                class="pager"
-                :disabled="!canNext"
-                @click="nextPage"
-              >
-                Next <i class="ph ph-caret-right" />
-              </button>
+              <!-- footer -->
+              <div v-if="!isEmpty" class="tfoot">
+                <span class="tfoot__text">{{ footerText }}</span>
+                <div class="tfoot__nav">
+                  <button
+                    type="button"
+                    class="pager"
+                    :disabled="!canPrev"
+                    @click="prevPage"
+                  >
+                    <i class="ph ph-caret-left" /> Previous
+                  </button>
+                  <button
+                    type="button"
+                    class="pager"
+                    :disabled="!canNext"
+                    @click="nextPage"
+                  >
+                    Next <i class="ph ph-caret-right" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -403,8 +500,24 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
       :open="formOpen"
       :mode="formMode"
       :contact="formContact"
+      :schema-fields="createSchemaFields"
       @close="formOpen = false"
       @saved="onSaved"
+    />
+    <ListFormModal
+      :open="listFormOpen"
+      :mode="listFormMode"
+      :list="listFormTarget"
+      @close="listFormOpen = false"
+      @saved="onListSaved"
+    />
+    <ImportWizardModal
+      :open="importOpen"
+      :lists="lists"
+      :default-list-id="selectedListId"
+      @close="importOpen = false"
+      @imported="onImported"
+      @view-contacts="importOpen = false"
     />
     <ConfirmDeleteModal
       :open="!!deleteTarget"
@@ -415,11 +528,20 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
       @cancel="cancelDelete"
       @confirm="confirmDelete"
     />
+    <ConfirmDeleteModal
+      :open="!!listDeleteTarget"
+      title="Delete list?"
+      :body="`The list “${listDeleteTarget?.name}” will be deleted. Its contacts are kept — only the list and its memberships are removed.`"
+      confirm-label="Delete list"
+      :loading="deletingList"
+      @cancel="listDeleteTarget = null"
+      @confirm="confirmDeleteList"
+    />
   </div>
 </template>
 
 <style scoped>
-/* Single root for the template; lays out as if its children (topbar + scroll)
+/* Single root for the template; lays out as if its children (topbar + body)
    were direct flex children of the layout's <main>. */
 .page {
   display: contents;
@@ -489,6 +611,21 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
   font-size: 13px;
 }
 
+/* body: lists panel + main column */
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.main-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* scroll + content */
 .scroll {
   flex: 1;
@@ -525,6 +662,34 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
   font-size: 13px;
   color: var(--gray-500);
   margin-top: 6px;
+}
+.header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: #fff;
+  color: var(--gray-700);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 100ms ease;
+}
+.btn-secondary:hover {
+  background: var(--gray-50);
+}
+.btn-secondary .ph {
+  font-size: 16px;
 }
 .btn-primary {
   display: flex;

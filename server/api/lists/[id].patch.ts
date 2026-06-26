@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { serverSupabaseClient } from '#supabase/server'
-import type { Database } from '~~/app/types/database.types'
+import type { Database, Json } from '~~/app/types/database.types'
 import { updateListSchema } from '#shared/schemas'
 
 /**
@@ -28,6 +28,8 @@ export default defineEventHandler(async (event) => {
   if (parsed.data.name !== undefined) update.name = parsed.data.name
   if (parsed.data.description !== undefined)
     update.description = parsed.data.description
+  if (parsed.data.attributeSchema !== undefined)
+    update.attribute_schema = parsed.data.attributeSchema as Json
 
   if (Object.keys(update).length === 0) {
     throw createError({ statusCode: 400, statusMessage: 'No fields to update' })

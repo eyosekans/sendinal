@@ -608,9 +608,76 @@ Goal: full campaign builder with drag-and-drop editor, scheduling, open/click tr
 Goal: smart targeting with custom contact attributes, dynamic segments, and basic A/B testing.
 
 ### 3.1 Custom contact attributes
-- [ ] UI to define custom attribute keys per list (stored as a list-level JSON schema)
-- [ ] Contact import: map CSV columns to custom attributes
-- [ ] Contact edit form: render fields dynamically from attribute schema
+- [x] UI to define custom attribute keys per list (stored as a list-level JSON schema)
+- [x] Contact import: map CSV columns to custom attributes
+- [x] Contact edit form: render fields dynamically from attribute schema
+
+> **3.1 notes (2026-06-26 — Contacts page rebuilt from Stitch design handoff
+> `docs/stitch_ses_email_campaign_manager/code.html`)**
+> - **Scope decisions (confirmed with the user):** list/attribute management lives
+>   as a **"Lists & Segments" panel inside `/contacts`** (the design handoff), the
+>   **CSV import UI is built now** (also clears the 1.6-deferred import UI), and the
+>   contact edit form renders the **union of attribute schemas across all the
+>   contact's lists**. The design's **Filter** button was omitted — attribute-based
+>   filtering belongs to 3.2's segment builder (consistent with the repo's
+>   "don't draw unbacked controls" precedent).
+> - **Migration** `20260626000001_lists_add_attribute_schema.sql` — adds
+>   `lists.attribute_schema JSONB NOT NULL DEFAULT '[]'`. ⚠️ **NOT YET APPLIED** —
+>   the connected Supabase MCP is read-only (see [[supabase-mcp-readonly]]), so
+>   **apply it in the Supabase SQL editor before list create/edit/import works**
+>   (POST/PATCH `/api/lists` always send `attribute_schema`).
+> - **Attribute schema model** (`shared/schemas/list.ts`): an array of
+>   `{ key, label, type, options? }`; `type ∈ text|number|date|boolean|select`.
+>   Keys are slug-validated + unique-per-list. `createListSchema`/`updateListSchema`
+>   gained `attributeSchema`; `app/types/database.types.ts` + `app/types/list.ts`
+>   updated. `GET /api/lists` already `select('*')` so it surfaces the column.
+> - **New endpoint** `GET /api/contacts/:id/attribute-schema` — union of field
+>   defs across the contact's lists (deduped by key), drives the dynamic edit form.
+> - **Components:** `contacts/ListsPanel.vue` (lists sidebar: select→`listId`
+>   filter, create/edit/delete), `contacts/ListFormModal.vue` (list CRUD + the
+>   attribute-schema editor = item 1), `contacts/ImportCsvModal.vue` (papaparse
+>   parse + auto-guessed column→field/attribute mapping + target list = item 2),
+>   and a now-dynamic `contacts/ContactFormModal.vue` (renders schema fields by
+>   type, preserves existing non-schema keys, "+ Add custom field" = item 3).
+> - **Dep:** `papaparse` (+ `@types/papaparse`), client-side CSV parsing.
+> - **Known limitation:** the status-tab counts stay global (the `/api/contacts/stats`
+>   endpoint isn't list-scoped); per-list status counts can come with 3.2.
+> - Verified: `pnpm typecheck`, `pnpm lint`, `pnpm build` all clean. ⚠️ Live
+>   click-through needs the migration applied + a signed-in session (`pnpm dev`).
+>
+> **3.1 follow-up — CSV Import Wizard (2026-06-26, Stitch handoff
+> `docs/csv-import-wizard/project/CSV Import Wizard.dc.html`)**
+> Replaced the single-screen `ImportCsvModal` with a 720px, 6-state wizard
+> (`ImportWizardModal.vue` + `StepBar.vue`): **Upload → Map → Configure → Review
+> → Importing → Results**. Backdrop is non-dismissible (X only); sticky
+> header/footer; pinned step bar.
+> - **Scope (confirmed):** full real data — chunked import w/ live progress arc,
+>   real New/Update split, real breakdown. Duplicate strategies wired: **Update
+>   existing** (default) + **Skip duplicates** ("Fill empty only" dropped per the
+>   user). Invalid-email: both **Skip invalid** + **Import anyway & flag**.
+> - **Migration** `20260626000002_contacts_add_email_unverified.sql` — adds
+>   `contacts.email_unverified BOOLEAN DEFAULT false` (+ partial sendable index).
+>   ⚠️ **NOT YET APPLIED** (MCP read-only — apply in the Supabase SQL editor).
+>   Flagged contacts are **excluded from campaign dispatch**
+>   (`worker/processors/campaign-dispatch.ts` now filters `email_unverified=false`).
+> - **Backend:** `import.post.ts` reworked — looks up existing emails, inserts new
+>   in bulk, updates existing per `duplicateStrategy` (or skips), stores the
+>   `emailUnverified` flag, returns `{received, imported, updated, skipped,
+>   failed, listId}`. New `POST /api/contacts/import-check` (read-only New-vs-
+>   existing split for the Review step). Schemas: `importContactSchema`
+>   (conditional email validation + flag), `duplicateStrategySchema`,
+>   `importCheckSchema`, shared `EMAIL_RE`.
+> - **Client import** is chunked (200/batch) so the progress arc reflects real
+>   throughput; emits `imported` (parent refreshes) while staying on Results.
+>   "Close & run in background" closes the modal — the in-flight batch loop
+>   finishes even after unmount (no true server-side job).
+> - **Deviations from the mock (noted):** the Step-2 field dropdown is a styled
+>   native `<select>` (not a custom popover); Step-3 "Create a new list" link
+>   omitted (use the Lists panel); Review table caps at 100 rows; per-row counts
+>   may differ slightly from the mock's sample copy (computed from real data).
+> - Two migrations now pending: `20260626000001` (lists.attribute_schema) +
+>   `20260626000002` (contacts.email_unverified).
+> - Verified: `pnpm typecheck`, worker `tsc`, `pnpm lint`, `pnpm build` all clean.
 
 ### 3.2 Segment builder
 - [ ] Segment rule schema: `{ field, operator, value }[]` with AND logic
