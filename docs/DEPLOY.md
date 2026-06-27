@@ -31,16 +31,10 @@ Sendinal runs as three pieces:
 
 ## 1. Railway — Redis + worker
 
-1. **New Project → Deploy from GitHub repo** (this repo). This creates the
-   **worker** service, which reads the root `railway.toml` (start command
-   `node worker/index.ts`, build step skipped). Railway config-as-code is
-   single-service — it does **not** create Redis, so add that next.
-   - If a deploy ever reports *"No start command could be found,"* the
-     `railway.toml` wasn't applied — set **Settings → Deploy → Custom Start
-     Command** to `node worker/index.ts` directly.
-2. **Add Redis**: in the project, **New → Database → Add Redis**. It injects
-   `REDIS_URL` into the worker automatically (internal host
-   `redis.railway.internal`).
+1. **New Project → Deploy from GitHub repo** (this repo). Railway reads
+   `railway.toml` and provisions the `worker` + `redis` services.
+2. **Redis**: the `redis` plugin injects `REDIS_URL` into Railway services
+   automatically (internal host `redis.railway.internal`). The worker picks it up.
 3. **Enable Redis public networking** (Redis service → Settings → Networking →
    *Public Networking* / TCP proxy). Copy the **public** connection URL
    (`redis://default:<pass>@<proxy-host>:<port>`) — Vercel needs this (it can't
