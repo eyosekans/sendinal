@@ -15,6 +15,7 @@
     "postinstall": "nuxt prepare",
     "worker": "node --watch worker/index.ts",
     "worker:start": "node worker/index.ts",
+    "start": "node worker/index.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
