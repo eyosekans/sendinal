@@ -80,11 +80,18 @@ Sendinal runs as three pieces:
    NUXT_PUBLIC_SUPABASE_KEY=<anon key>
    NUXT_SUPABASE_SECRET_KEY=<service-role key>      # used by SES webhook + tracking writes
    NUXT_PUBLIC_APP_URL=https://<your-vercel-domain> # same value as the worker
+   NUXT_SES_FROM_EMAIL=info@woomast.com             # default campaign sender (REQUIRED)
+   NUXT_SES_FROM_NAME=Woomast                       # default campaign sender name
    REDIS_URL=redis://default:<pass>@<proxy-host>:<port>   # Railway Redis PUBLIC proxy URL
    ```
 
-   - The web app does **not** send email or poll SQS, so it doesn't need the AWS
-     keys (unless you switch bounce handling to the HTTPS webhook — see §4).
+   - `NUXT_SES_FROM_EMAIL` / `NUXT_SES_FROM_NAME` are **required on the web**:
+     `POST /api/campaigns` stamps `from_email`/`from_name` from these when the
+     builder doesn't specify a sender. If unset, campaigns are created with an
+     empty `from_email` and every send fails worker-side validation
+     ("fromEmail: Invalid email address").
+   - The web still doesn't need the AWS **keys** (the worker sends + polls SQS),
+     unless you switch bounce handling to the HTTPS webhook — see §4.
    - `REDIS_URL` here is the **public** Railway proxy URL from step 1.3, not the
      internal one.
 3. Deploy. After the first deploy, set `NUXT_PUBLIC_APP_URL` (both Vercel **and**
