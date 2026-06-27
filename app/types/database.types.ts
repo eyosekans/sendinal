@@ -144,6 +144,7 @@ export interface Database {
           design: Json
           list_id: string | null
           segment_rules: Json
+          ab_variants: Json
           status: CampaignStatus
           scheduled_at: string | null
           sent_at: string | null
@@ -160,6 +161,7 @@ export interface Database {
           design: Json
           list_id?: string | null
           segment_rules?: Json
+          ab_variants?: Json
           status?: CampaignStatus
           scheduled_at?: string | null
           sent_at?: string | null
@@ -176,6 +178,7 @@ export interface Database {
           design?: Json
           list_id?: string | null
           segment_rules?: Json
+          ab_variants?: Json
           status?: CampaignStatus
           scheduled_at?: string | null
           sent_at?: string | null
@@ -198,6 +201,7 @@ export interface Database {
           subject: string
           html: string
           design: Json
+          category: string | null
           created_at: string
           updated_at: string
         }
@@ -207,6 +211,7 @@ export interface Database {
           subject: string
           html: string
           design: Json
+          category?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -216,6 +221,7 @@ export interface Database {
           subject?: string
           html?: string
           design?: Json
+          category?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -229,6 +235,7 @@ export interface Database {
           status: SendStatus
           ses_message_id: string | null
           error: string | null
+          variant: string | null
           sent_at: string | null
           created_at: string
         }
@@ -239,6 +246,7 @@ export interface Database {
           status?: SendStatus
           ses_message_id?: string | null
           error?: string | null
+          variant?: string | null
           sent_at?: string | null
           created_at?: string
         }
@@ -249,6 +257,7 @@ export interface Database {
           status?: SendStatus
           ses_message_id?: string | null
           error?: string | null
+          variant?: string | null
           sent_at?: string | null
           created_at?: string
         }

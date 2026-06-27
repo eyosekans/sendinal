@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
   const { data, error } = await supabase
     .from('campaigns')
     .select(
-      'id, name, subject, from_name, from_email, html, design, status, list_id, segment_rules, scheduled_at, sent_at, created_at, updated_at',
+      'id, name, subject, from_name, from_email, html, design, status, list_id, segment_rules, ab_variants, scheduled_at, sent_at, created_at, updated_at',
     )
     .eq('id', id)
     .maybeSingle()

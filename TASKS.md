@@ -744,16 +744,100 @@ Goal: smart targeting with custom contact attributes, dynamic segments, and basi
 >   - `pnpm typecheck`, worker `tsc`, `pnpm lint`, `pnpm build` all clean.
 
 ### 3.3 A/B testing (2 variants)
-- [ ] Schema: add `ab_variants` JSONB to `campaigns` — `[{ subject, html, design, weight }]`
-- [ ] Campaign builder: toggle A/B mode, configure variant B subject/body and split ratio
-- [ ] At dispatch: randomly assign contacts to variant A or B (by weight), record variant in `sends` table
-- [ ] Stats page: show open/click rates separately per variant with a winner indicator
+- [x] Schema: add `ab_variants` JSONB to `campaigns` — `[{ subject, weight }]`  _(subject-only — see notes)_
+- [x] Campaign builder: toggle A/B mode, configure variant B subject + split ratio
+- [x] At dispatch: randomly assign contacts to variant A or B (by weight), record variant in `sends` table
+- [x] Stats page: show open/click rates separately per variant with a winner indicator
+
+> **3.3 notes (2026-06-27)**
+> - **Scope (confirmed with user): subject-line A/B only.** Variants A and B share
+>   the body, differ only in the subject. Winner = higher **open rate**. (Full-body
+>   A/B with a second editor was the alternative; deferred as out-of-scope.)
+> - ⚠️ **Migration `20260627000001_campaigns_ab_test.sql` — apply in the Supabase
+>   SQL editor** (MCP read-only). Adds `campaigns.ab_variants jsonb default '[]'`
+>   + `sends.variant text` + `sends_campaign_variant_idx`. Dispatch/stats query
+>   these columns, so A/B campaigns need it applied. `database.types.ts` updated.
+> - **Data model:** variant A = the campaign's own `subject`; `ab_variants` holds
+>   only B as `[{ subject, weight }]` where `weight` is B's % share (1–99), A gets
+>   the remainder (no content duplication). Schema in its own zod-only
+>   `shared/schemas/ab.ts` (so the worker can import it under NodeNext without the
+>   `campaign.ts → ./segment` extension conflict). `campaign.{create,update}Schema`
+>   gained `abVariants`; POST/PATCH/GET campaign all round-trip `ab_variants`.
+> - **Dispatch** (`campaign-dispatch.ts`): each recipient is assigned A or B by a
+>   weighted coin flip (`Math.random()*100 < B.weight`), the label is stored in
+>   `sends.variant`, and that variant's subject rides the `email.send` job (the
+>   shared body/tracking HTML is unchanged). Non-A/B campaigns store `variant=null`.
+> - **Stats** (`/api/campaigns/:id/stats`): new `abTest` block — per-variant
+>   recipients, unique opens/clicks, open/click rates, and a `winner` flag (strict
+>   higher open rate, only when both variants have recipients). Analytics page
+>   shows an "A/B test — subject line" panel (two cards, winner badge). Builder
+>   gained an "A/B Test Subject" toggle + Variant B subject + split slider,
+>   autosaved; locked once the campaign leaves draft/scheduled.
+> - Verified: schema unit 11/11 (weight bounds 1–99, int-only, subject required,
+>   max-1, trim). `pnpm typecheck`, worker `tsc`, `pnpm lint`, `pnpm build` clean.
+>   ⚠️ Live dispatch/stats test pending the migration being applied.
 
 ### 3.4 Template library
-- [ ] Templates list page (`/templates`)
-- [ ] Preview template (rendered HTML in iframe)
-- [ ] Duplicate template
-- [ ] Start campaign from template
+- [x] Templates list page (`/templates`)
+- [x] Preview template (rendered HTML in iframe)
+- [x] Duplicate template
+- [x] Start campaign from template
+
+> **3.4 UI notes (2026-06-27 — built from Claude Design handoff
+> `design-system-template-library-screen/Template Library.dc.html`)**
+> - ⚠️ **Migration `20260627000002_templates_add_category.sql` — apply in the
+>   Supabase SQL editor** (MCP read-only). Adds `templates.category text` (+ CHECK
+>   for the 5 categories). `GET /api/templates` now selects `category`, so the
+>   page 500s until it's applied. `database.types.ts` updated.
+> - **Scope (confirmed with user):** categories added (migration); the mock's
+>   **"Used in N campaigns"** stat **dropped** (campaigns don't link back to a
+>   template — would need a `campaigns.template_id` migration + dispatch change);
+>   **"New template" → the campaign builder** (`/campaigns/new`); **Import HTML +
+>   the create-chooser + layout skeletons dropped** (no standalone template
+>   editor / Unlayer-import). Picker ("Choose a template") mode deferred.
+> - **Page `app/pages/templates/index.vue`** (default app shell): header +
+>   subtitle + "New template"; toolbar (search bound to the shared top-bar query +
+>   category pills + sort [Last edited / Name A–Z] + grid/list toggle); **grid**
+>   and **list** views with category-tinted placeholder thumbnails; per-card hover
+>   (Preview / Use), 3-dot menu (Duplicate, Rename, Use in new campaign, Delete),
+>   inline rename + inline delete confirm; **preview modal** with a meta sidebar
+>   (click-to-rename, category selector → PATCH, Use/Duplicate, danger-zone delete)
+>   and the **real template HTML rendered in a sandboxed `<iframe srcdoc>`**
+>   (roadmap requirement); toasts.
+> - **Backend (this session):** `templates.category` added to the schema
+>   (`templateCategorySchema`, `TEMPLATE_CATEGORIES`) and to POST/PATCH/GET/
+>   duplicate. Management endpoints (PATCH/DELETE/duplicate) were added in the
+>   prior session. "Use in new campaign" → `/campaigns/new?template=:id` (builder
+>   seeds from it — already wired in 2.1).
+> - **Deviation:** card/list thumbnails are lightweight category-tinted
+>   placeholders (like the mock), not live renders — real HTML renders only in the
+>   preview iframe (perf: avoids N iframes). The mock's editor/author, layout
+>   label and dimension fields are dropped (no backing data).
+> - Verified: `pnpm typecheck`, `pnpm lint`, `pnpm build` clean. ⚠️ Live
+>   click-through + endpoint tests pending the category migration being applied.
+
+> **3.4 notes (2026-06-27 — backend/API; UI pages awaiting user-provided design)**
+> - Already existed from 2.1: `GET /api/templates` (paginated, name search,
+>   omits `design`), `GET /api/templates/:id` (full incl. `design`),
+>   `POST /api/templates` (save from the builder). Schemas in
+>   `shared/schemas/template.ts` (create/update/list-query).
+> - **Added this session (the management endpoints the `/templates` page needs):**
+>   - `PATCH /api/templates/:id` — rename / update subject/html/design (partial;
+>     sets `updated_at`; 404 if missing).
+>   - `DELETE /api/templates/:id` — remove (campaigns made from it keep their own
+>     copied html/design, so they're unaffected; 404 if missing).
+>   - `POST /api/templates/:id/duplicate` — clone to "<name> (copy)" (201; 404 if
+>     the source is gone). Same dir+file routing pattern as campaigns.
+> - **"Start campaign from template" is already wired:** `/campaigns/new?template=<id>`
+>   → `new.vue` passes `templateId` → `CampaignBuilder` seeds subject + design from
+>   `GET /api/templates/:id`. Only a UI entry button on the templates page remains.
+> - Verified live (auth session) 12/12: create → duplicate (201, "(copy)", new id,
+>   copied html/subject) → rename (PATCH) → list shows both → delete (200) →
+>   404 after; plus 401 no-cookie, 400 bad id, 404 duplicate-missing.
+>   `pnpm typecheck`, `pnpm lint`, `pnpm build` clean.
+> - **TODO (needs your design):** `/templates` list page (cards/table with
+>   preview, duplicate, delete, rename, "Use template" → builder), and the
+>   iframe preview. Share the handoff and I'll build them.
 
 ### 3.5 Sending rate control
 - [ ] Config: `SES_RATE_LIMIT_PER_SECOND` env var

@@ -34,6 +34,7 @@ export default defineEventHandler(async (event) => {
       design: body.design as Json,
       list_id: body.listId ?? null,
       segment_rules: body.segmentRules as Json,
+      ab_variants: body.abVariants as Json,
       status: 'draft',
     })
     .select()

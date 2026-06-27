@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { serverSupabaseClient } from '#supabase/server'
+import { abVariantsSchema } from '#shared/schemas'
 import type { Database, SendStatus } from '~~/app/types/database.types'
 
 /**
@@ -24,7 +25,7 @@ export default defineEventHandler(async (event) => {
 
   const { data: campaign, error: cErr } = await supabase
     .from('campaigns')
-    .select('id')
+    .select('id, subject, ab_variants')
     .eq('id', id)
     .maybeSingle()
   if (cErr) {
@@ -37,7 +38,7 @@ export default defineEventHandler(async (event) => {
   // All sends for the campaign (id + status), tallied in-app.
   const { data: sendRows, error: sErr } = await supabase
     .from('sends')
-    .select('id, status')
+    .select('id, status, variant')
     .eq('campaign_id', id)
   if (sErr) {
     throw createError({ statusCode: 500, statusMessage: sErr.message })
@@ -81,6 +82,57 @@ export default defineEventHandler(async (event) => {
   const pct = (n: number) =>
     recipients ? Number(((n / recipients) * 100).toFixed(1)) : null
 
+  // A/B per-variant breakdown (task 3.3). Winner = higher open rate, only when
+  // both variants have recipients and there's a strict leader.
+  const abParsed = abVariantsSchema.safeParse(campaign.ab_variants ?? [])
+  const variantB = abParsed.success ? abParsed.data[0] : undefined
+  let abTest: {
+    metric: 'open'
+    variants: {
+      label: string
+      subject: string
+      recipients: number
+      opened: number
+      clicked: number
+      openRate: number | null
+      clickRate: number | null
+      winner: boolean
+    }[]
+  } | null = null
+  if (variantB) {
+    const subjectByLabel: Record<string, string> = {
+      A: campaign.subject,
+      B: variantB.subject,
+    }
+    const variants = (['A', 'B'] as const).map((label) => {
+      const vsends = sends.filter((s) => s.variant === label)
+      const r = vsends.length
+      const o = vsends.filter((s) => openedSends.has(s.id)).length
+      const c = vsends.filter((s) => clickedSends.has(s.id)).length
+      const vpct = (n: number) =>
+        r ? Number(((n / r) * 100).toFixed(1)) : null
+      return {
+        label,
+        subject: subjectByLabel[label] ?? '',
+        recipients: r,
+        opened: o,
+        clicked: c,
+        openRate: vpct(o),
+        clickRate: vpct(c),
+        winner: false,
+      }
+    })
+    const eligible = variants.filter(
+      (v) => v.recipients > 0 && v.openRate !== null,
+    )
+    if (eligible.length === 2) {
+      const top = Math.max(...eligible.map((v) => v.openRate!))
+      const leaders = eligible.filter((v) => v.openRate === top)
+      if (leaders.length === 1) leaders[0]!.winner = true
+    }
+    abTest = { metric: 'open', variants }
+  }
+
   return {
     campaignId: id,
     recipients,
@@ -94,5 +146,6 @@ export default defineEventHandler(async (event) => {
       complaint: pct(counts.complained),
       failed: pct(counts.failed),
     },
+    abTest,
   }
 })

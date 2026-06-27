@@ -3,9 +3,9 @@ import { serverSupabaseClient } from '#supabase/server'
 import type { Database } from '~~/app/types/database.types'
 
 /**
- * GET /api/templates/:id
- * Full template including the Unlayer `design` JSON, used to load a template
- * into the campaign builder.
+ * DELETE /api/templates/:id
+ * Remove a template. Campaigns already created from it keep their own copied
+ * html/design, so they're unaffected. 404 if the template doesn't exist.
  */
 export default defineEventHandler(async (event) => {
   await requireUser(event)
@@ -18,8 +18,9 @@ export default defineEventHandler(async (event) => {
   const supabase = await serverSupabaseClient<Database>(event)
   const { data, error } = await supabase
     .from('templates')
-    .select('id, name, subject, html, design, category, created_at, updated_at')
+    .delete()
     .eq('id', id)
+    .select('id')
     .maybeSingle()
   if (error) {
     throw createError({ statusCode: 500, statusMessage: error.message })
@@ -28,5 +29,5 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Template not found' })
   }
 
-  return data
+  return { success: true }
 })

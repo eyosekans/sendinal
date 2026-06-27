@@ -27,6 +27,7 @@ export interface CampaignDetail {
   list_id: string | null
   listName: string | null
   segment_rules: unknown
+  ab_variants: unknown
   scheduled_at: string | null
   sent_at: string | null
   created_at: string
@@ -75,6 +76,23 @@ export interface CampaignStats {
     complaint: number | null
     failed: number | null
   }
+  /** Per-variant breakdown when the campaign is an A/B test (task 3.3). */
+  abTest: CampaignAbTest | null
+}
+
+/** A/B test result: per-variant engagement with a winner by open rate. */
+export interface CampaignAbTest {
+  metric: 'open'
+  variants: {
+    label: string
+    subject: string
+    recipients: number
+    opened: number
+    clicked: number
+    openRate: number | null
+    clickRate: number | null
+    winner: boolean
+  }[]
 }
 
 /** Daily engagement series (GET /api/campaigns/:id/timeseries). */

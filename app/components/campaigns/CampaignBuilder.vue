@@ -7,6 +7,7 @@ import {
   SEGMENT_OPERATOR_LABELS,
   SEGMENT_VALUE_OPERATORS,
   segmentRulesSchema,
+  abVariantsSchema,
   contactStatusSchema,
   type SegmentOperator,
   type AttributeField,
@@ -223,6 +224,22 @@ function schedulePreview() {
   previewTimer = setTimeout(runPreview, 400)
 }
 
+/* ---------- A/B test (task 3.3, subject-only) ---------- */
+const existingAb = (() => {
+  const p = abVariantsSchema.safeParse(existing?.ab_variants ?? [])
+  return p.success ? p.data[0] : undefined
+})()
+const abOn = ref(!!existingAb)
+const variantBSubject = ref(existingAb?.subject ?? '')
+const variantBWeight = ref(existingAb?.weight ?? 50)
+// Stored payload: variant B only (A is the campaign's own subject). Empty when
+// the toggle is off or B has no subject yet, so it won't fail schema validation.
+const abVariantsPayload = computed(() =>
+  abOn.value && variantBSubject.value.trim()
+    ? [{ subject: variantBSubject.value.trim(), weight: variantBWeight.value }]
+    : [],
+)
+
 /* ---------- editor ---------- */
 const editor = ref<InstanceType<typeof CampaignEditor> | null>(null)
 const editorReady = ref(false)
@@ -300,6 +317,7 @@ async function doSave() {
       ...(fromEmail.value.trim() ? { fromEmail: fromEmail.value.trim() } : {}),
       ...(listId.value ? { listId: listId.value } : {}),
       segmentRules: { match: 'all' as const, rules: cleanRules.value },
+      abVariants: abVariantsPayload.value,
     }
 
     if (!campaignId.value) {
@@ -342,6 +360,8 @@ watch([name, subject, fromName, fromEmail, listId], scheduleSave)
 watch(rules, scheduleSave, { deep: true })
 watch([listId, cleanRules], schedulePreview, { deep: true })
 onMounted(runPreview)
+// A/B edits → autosave.
+watch([abOn, variantBSubject, variantBWeight], scheduleSave)
 
 /* ---------- target list dropdown ---------- */
 const listOpen = ref(false)
@@ -637,13 +657,58 @@ const TOAST_COLOR = {
           <div class="section-label">Campaign Details</div>
 
           <div class="field">
-            <label class="field__label">Subject Line</label>
+            <label class="field__label">
+              Subject Line{{ abOn ? ' — Variant A' : '' }}
+            </label>
             <input
               v-model="subject"
               placeholder="Something exciting is here…"
               class="input"
               :disabled="locked"
             />
+          </div>
+
+          <!-- A/B test (task 3.3, subject-only) -->
+          <div
+            class="toggle-row"
+            :class="{ 'toggle-row--on': abOn, 'toggle-row--disabled': locked }"
+            @click="!locked && (abOn = !abOn)"
+          >
+            <div>
+              <div class="toggle-row__title">A/B Test Subject</div>
+              <div class="toggle-row__sub">
+                Split recipients between two subject lines
+              </div>
+            </div>
+            <div class="switch" :class="{ 'switch--on': abOn }">
+              <div class="switch__knob" />
+            </div>
+          </div>
+
+          <div v-if="abOn" class="ab-fields">
+            <div class="field">
+              <label class="field__label">Subject — Variant B</label>
+              <input
+                v-model="variantBSubject"
+                placeholder="An alternate subject…"
+                class="input"
+                :disabled="locked"
+              />
+            </div>
+            <div class="field">
+              <label class="field__label">
+                Split — A {{ 100 - variantBWeight }}% · B {{ variantBWeight }}%
+              </label>
+              <input
+                v-model.number="variantBWeight"
+                type="range"
+                min="1"
+                max="99"
+                step="1"
+                class="ab-range"
+                :disabled="locked"
+              />
+            </div>
           </div>
 
           <div class="divider" />
@@ -1305,6 +1370,27 @@ const TOAST_COLOR = {
   height: 1px;
   background: var(--gray-100);
   margin: 22px 0;
+}
+
+/* A/B test (task 3.3) */
+.ab-fields {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: var(--gray-50);
+}
+.ab-fields .field:last-child {
+  margin-bottom: 0;
+}
+.ab-range {
+  width: 100%;
+  accent-color: var(--primary-600);
+  cursor: pointer;
+}
+.ab-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 /* segment builder (task 3.2) */

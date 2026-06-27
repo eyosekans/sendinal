@@ -38,6 +38,7 @@ export default defineEventHandler(async (event) => {
   if (b.listId !== undefined) update.list_id = b.listId
   if (b.segmentRules !== undefined)
     update.segment_rules = b.segmentRules as Json
+  if (b.abVariants !== undefined) update.ab_variants = b.abVariants as Json
   // Cancelling a draft/scheduled campaign (the only status change PATCH allows).
   if (b.status !== undefined) update.status = b.status
 

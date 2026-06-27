@@ -6,6 +6,7 @@ import {
 } from '../../shared/schemas/jobs.ts'
 import type { EmailSendJob } from '../../shared/schemas/jobs.ts'
 import { segmentRulesSchema } from '../../shared/schemas/segment.ts'
+import { abVariantsSchema } from '../../shared/schemas/ab.ts'
 import { matchesSegmentRules } from '../../shared/segments.ts'
 import { connection } from '../queues/connection.ts'
 import { supabase } from '../lib/supabase.ts'
@@ -35,7 +36,7 @@ export async function processCampaignDispatch(job: Job) {
   const { data: campaign, error: cErr } = await supabase
     .from('campaigns')
     .select(
-      'id, subject, html, from_name, from_email, list_id, status, segment_rules',
+      'id, subject, html, from_name, from_email, list_id, status, segment_rules, ab_variants',
     )
     .eq('id', campaignId)
     .single()
@@ -81,6 +82,23 @@ export async function processCampaignDispatch(job: Job) {
     return
   }
 
+  // A/B (task 3.3): assign each recipient a subject-line variant by weight.
+  // Variant A is the campaign's own subject; B (if any) comes from ab_variants.
+  const abParsed = abVariantsSchema.safeParse(campaign.ab_variants ?? [])
+  const variantB = abParsed.success ? abParsed.data[0] : undefined
+  const variantByContact = new Map<string, { label: string; subject: string }>()
+  if (variantB) {
+    for (const c of contacts) {
+      // B with probability `variantB.weight`%, else A.
+      variantByContact.set(
+        c.id,
+        Math.random() * 100 < variantB.weight
+          ? { label: 'B', subject: variantB.subject }
+          : { label: 'A', subject: campaign.subject },
+      )
+    }
+  }
+
   // Create all sends in one insert, then enqueue jobs in bulk.
   const { data: inserted, error: insErr } = await supabase
     .from('sends')
@@ -89,6 +107,7 @@ export async function processCampaignDispatch(job: Job) {
         campaign_id: campaignId,
         contact_id: c.id,
         status: 'queued' as const,
+        variant: variantByContact.get(c.id)?.label ?? null,
       })),
     )
     .select('id, contact_id')
@@ -152,7 +171,7 @@ export async function processCampaignDispatch(job: Job) {
         campaignId,
         contactId: s.contact_id,
         to: emailByContact.get(s.contact_id)!,
-        subject: campaign.subject,
+        subject: variantByContact.get(s.contact_id)?.subject ?? campaign.subject,
         html,
         fromName: campaign.from_name,
         fromEmail: campaign.from_email,

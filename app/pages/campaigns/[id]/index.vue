@@ -313,6 +313,48 @@ const actMeta = (s: string) => ACT[s] ?? ACT.delivered!
             </div>
           </div>
 
+          <!-- A/B test result (task 3.3) -->
+          <div v-if="stats?.abTest" class="panel abpanel">
+            <div class="panel__padhead">
+              <h3 class="panel__title">A/B test — subject line</h3>
+              <span class="panel__meta">Winner by open rate</span>
+            </div>
+            <div class="abgrid">
+              <div
+                v-for="v in stats.abTest.variants"
+                :key="v.label"
+                class="abcard"
+                :class="{ 'abcard--win': v.winner }"
+              >
+                <div class="abcard__head">
+                  <span class="abcard__label">Variant {{ v.label }}</span>
+                  <span v-if="v.winner" class="abcard__win">
+                    <i class="ph ph-trophy" /> Winner
+                  </span>
+                </div>
+                <div class="abcard__subject">{{ v.subject || '—' }}</div>
+                <div class="abcard__metrics">
+                  <div class="abmetric abmetric--primary">
+                    <span class="abmetric__val">{{
+                      v.openRate !== null ? v.openRate + '%' : '—'
+                    }}</span>
+                    <span class="abmetric__lbl">Open rate</span>
+                  </div>
+                  <div class="abmetric">
+                    <span class="abmetric__val">{{
+                      v.clickRate !== null ? v.clickRate + '%' : '—'
+                    }}</span>
+                    <span class="abmetric__lbl">Click rate</span>
+                  </div>
+                  <div class="abmetric">
+                    <span class="abmetric__val">{{ fmtNum(v.recipients) }}</span>
+                    <span class="abmetric__lbl">Recipients</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- top clicked links -->
           <div class="panel tablepanel">
             <div class="panel__padhead">
@@ -704,6 +746,81 @@ const actMeta = (s: string) => ACT[s] ?? ACT.delivered!
   font-size: 13px;
   color: var(--gray-500);
 }
+
+/* A/B test result (task 3.3) */
+.abpanel {
+  margin-bottom: 20px;
+}
+.abgrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  padding: 4px 22px 22px;
+}
+.abcard {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg, 10px);
+  padding: 16px;
+  background: var(--gray-50);
+}
+.abcard--win {
+  border-color: var(--primary-600);
+  background: var(--primary-100);
+}
+.abcard__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.abcard__label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--gray-800);
+}
+.abcard__win {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary-800);
+  background: #fff;
+  border: 1px solid var(--primary-600);
+  border-radius: var(--radius-full, 9999px);
+  padding: 2px 8px;
+}
+.abcard__subject {
+  font-size: 13px;
+  color: var(--gray-700);
+  line-height: 1.4;
+  margin-bottom: 14px;
+  min-height: 36px;
+}
+.abcard__metrics {
+  display: flex;
+  gap: 16px;
+}
+.abmetric {
+  display: flex;
+  flex-direction: column;
+}
+.abmetric__val {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--gray-800);
+}
+.abmetric--primary .abmetric__val {
+  color: var(--primary-700, var(--primary-800));
+}
+.abmetric__lbl {
+  font-size: 11px;
+  color: var(--gray-500);
+  margin-top: 2px;
+}
+
 .lrow,
 .arow {
   display: grid;

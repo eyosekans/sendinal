@@ -5,6 +5,17 @@ import { z } from 'zod'
  * campaign builder and loaded back into the editor when starting a campaign.
  */
 
+/** Template category (task 3.4). NULL/omitted = uncategorised. */
+export const TEMPLATE_CATEGORIES = [
+  'Newsletter',
+  'Promotion',
+  'Announcement',
+  'Transactional',
+  'Seasonal',
+] as const
+export const templateCategorySchema = z.enum(TEMPLATE_CATEGORIES)
+export type TemplateCategory = z.infer<typeof templateCategorySchema>
+
 /** Payload for saving a template (POST /api/templates). */
 export const createTemplateSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -12,6 +23,7 @@ export const createTemplateSchema = z.object({
   // Exported HTML and the Unlayer design JSON that produced it.
   html: z.string().min(1),
   design: z.record(z.string(), z.unknown()),
+  category: templateCategorySchema.nullish(),
 })
 export type CreateTemplateInput = z.infer<typeof createTemplateSchema>
 

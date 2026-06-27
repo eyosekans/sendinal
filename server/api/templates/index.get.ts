@@ -25,7 +25,11 @@ export default defineEventHandler(async (event) => {
 
   let query = supabase
     .from('templates')
-    .select('id, name, subject, created_at, updated_at', { count: 'exact' })
+    // `html` is included so the library can render real card thumbnails; it's
+    // the bulk of the payload, so revisit with a thumbnail cache at scale (4.7).
+    .select('id, name, subject, category, html, created_at, updated_at', {
+      count: 'exact',
+    })
     .order('updated_at', { ascending: false })
 
   if (search) {

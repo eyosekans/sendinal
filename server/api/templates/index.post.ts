@@ -27,8 +27,9 @@ export default defineEventHandler(async (event) => {
       subject: body.subject,
       html: body.html,
       design: body.design as Json,
+      category: body.category ?? null,
     })
-    .select('id, name, subject, created_at, updated_at')
+    .select('id, name, subject, category, created_at, updated_at')
     .single()
   if (error) {
     throw createError({ statusCode: 500, statusMessage: error.message })
