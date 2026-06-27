@@ -783,6 +783,57 @@ Goal: smart targeting with custom contact attributes, dynamic segments, and basi
 - [x] Duplicate template
 - [x] Start campaign from template
 
+> **3.4 follow-up — pruned inline starter templates (2026-06-27)**
+> Removed the 4 lorem-ipsum inline starters (Monthly Newsletter, Product
+> Announcement, Special Offer, Welcome Email) from the library at the user's
+> request — deleted the DB rows (no campaigns referenced them) **and** dropped
+> them from `scripts/seed-templates.ts` (with the now-unused `emailDoc`/`FOOTER`/
+> `button`/colour helpers) so a re-seed can't resurrect them. Library now holds
+> only the two file templates. Verified: re-seed = 0 inserted / 2 refreshed,
+> `pnpm lint` clean.
+
+> **3.4 follow-up — new seed template "Summer Travel Offer" (2026-06-27)**
+> Added a travel/summer 30%-off promo (Unlayer export handoff) to the shared
+> library via `scripts/seed-templates.ts`.
+> - File template `scripts/templates/summer-travel-offer.html` (+ 6 assets in
+>   `public/images/templates/summer-travel-offer/`); category **Promotion**.
+> - Generalized `hostImages()`: ref extraction now also catches inline
+>   `background-image: url('images/…')` (not just `<img src>`), and the asset read
+>   path is per-stem (`../public/images/templates/<stem>/…`) instead of the old
+>   hardcoded `springtime-newsletter` path (latent bug — `scripts/.public` never
+>   existed).
+> - Seed loop now **refreshes** existing *file* templates (re-hosted html/design)
+>   instead of skipping; inline templates still skip. This repaired a pre-existing
+>   bug: Springtime's `background-image: url('images/image-10.gif')` was missed by
+>   the old `src`-only regex, so its stored html kept a relative ref → the app
+>   404'd `/images/image-10.gif` on preview. image-10.gif is now hosted and the
+>   ref rewritten.
+> - Verified: re-seed (2 refreshed, 4 skipped); both file templates have 0
+>   relative `images/` left in html **and** design (schemaV16, hosted URLs so
+>   "Use in new campaign" loads/re-exports); all assets incl. image-10.gif HEAD
+>   200. `pnpm lint` clean.
+>
+> **3.4 follow-up — campaign→template back-reference (2026-06-27)**
+> Records which template a campaign was created from (re-enables the "used in N
+> campaigns" stat that 3.4 had dropped for lack of a link).
+> - ⚠️ **Migration `20260627000003_campaigns_add_template_id.sql` — apply in the
+>   Supabase SQL editor** (MCP read-only, see [[supabase-mcp-readonly]]). Adds
+>   `campaigns.template_id uuid references templates(id) on delete set null`
+>   (+ `campaigns_template_id_idx`). **POST `/api/campaigns` inserts `template_id`,
+>   so campaign creation 500s until this is applied.** `database.types.ts` updated.
+> - `createCampaignSchema` gained `templateId` (round-trips through POST/PATCH/GET
+>   + `CampaignDetail`). `ON DELETE SET NULL` keeps campaigns intact when a
+>   template is deleted (they already carry their own copied html/design).
+> - Builder (`CampaignBuilder.vue`) records the source both when seeded via
+>   `/campaigns/new?template=:id` and when "Load template" is used (last applied
+>   template wins); persisted via the existing autosave.
+> - Verified (migration applied 2026-06-27): `pnpm typecheck` + `pnpm lint` +
+>   `pnpm build` clean. DB behavioural test 5/5 (column accepts value, FK →
+>   templates, ON DELETE SET NULL nulls the link + keeps the campaign). HTTP API
+>   8/8 via an authenticated session: POST stores `template_id`, GET round-trips
+>   it, PATCH switches it (Load-template flow), POST without a template stores
+>   NULL, unauth → 401.
+
 > **3.4 UI notes (2026-06-27 — built from Claude Design handoff
 > `design-system-template-library-screen/Template Library.dc.html`)**
 > - ⚠️ **Migration `20260627000002_templates_add_category.sql` — apply in the
@@ -840,9 +891,31 @@ Goal: smart targeting with custom contact attributes, dynamic segments, and basi
 >   iframe preview. Share the handoff and I'll build them.
 
 ### 3.5 Sending rate control
-- [ ] Config: `SES_RATE_LIMIT_PER_SECOND` env var
-- [ ] BullMQ limiter: enforce per-second rate limit on `email.send` queue
-- [ ] Throttle warning in UI when campaign has >10,000 recipients (estimated send time shown)
+- [x] Config: `SES_RATE_LIMIT_PER_SECOND` env var  _(as `NUXT_SES_RATE_LIMIT_PER_SECOND`, the repo's NUXT_-prefixed convention; default 14)_
+- [x] BullMQ limiter: enforce per-second rate limit on `email.send` queue  _(done in 1.7)_
+- [x] Throttle warning in UI when campaign has >10,000 recipients (estimated send time shown)
+
+> **3.5 notes (2026-06-27)**
+> - Items 1–2 were already in place from 1.7: the `email.send` Worker carries a
+>   BullMQ `limiter: { max: SES_RATE, duration: 1000 }`. Tidied it to read the
+>   per-second rate from a single source.
+> - **Shared constants** `shared/sending.ts`: `DEFAULT_SES_RATE_PER_SECOND` (14)
+>   + `THROTTLE_WARNING_RECIPIENTS` (10,000) — imported by the worker (NodeNext,
+>   `../shared/sending.ts`) and the app (`#shared/sending`) so the rate/threshold
+>   don't drift. `worker/index.ts` now uses the shared default; `nuxt.config`
+>   gained `runtimeConfig.sesRateLimitPerSecond` (binds `NUXT_SES_RATE_LIMIT_PER_SECOND`).
+> - **Endpoint** `GET /api/config/sending` (requireUser-guarded) → `{ ratePerSecond,
+>   warnThreshold }`; `ratePerSecond` falls back to the shared default when the
+>   env is unset.
+> - **Builder UI** (`CampaignBuilder.vue`): SSR-fetches the config, and when the
+>   segment-filtered recipient estimate (`previewCount`) exceeds the threshold,
+>   shows an amber "Large send — N recipients" banner with an estimated finish
+>   time (`recipients / ratePerSecond`, formatted ~s/~min/~Xh Ym). Uses the real
+>   send count, so a segment that drops it under 10k hides the warning.
+> - Verified: app `typecheck` + worker `tsc` + `lint` + `build` clean. Endpoint
+>   e2e (auth session): 401 unauth, 200 auth, default `ratePerSecond` 14 +
+>   `warnThreshold` 10000, and `NUXT_SES_RATE_LIMIT_PER_SECOND=5` override →
+>   `ratePerSecond` 5.
 
 ---
 

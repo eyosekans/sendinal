@@ -33,6 +33,7 @@ export default defineEventHandler(async (event) => {
       html: body.html,
       design: body.design as Json,
       list_id: body.listId ?? null,
+      template_id: body.templateId ?? null,
       segment_rules: body.segmentRules as Json,
       ab_variants: body.abVariants as Json,
       status: 'draft',

@@ -50,6 +50,9 @@ export default defineNuxtConfig({
     awsSecretAccessKey: '',
     sesFromEmail: '',
     sesFromName: '',
+    // SES per-second send rate (binds NUXT_SES_RATE_LIMIT_PER_SECOND); the
+    // worker's BullMQ limiter and the builder's throttle estimate read it.
+    sesRateLimitPerSecond: '',
     sqsQueueUrl: '',
     redisUrl: '',
     public: {

@@ -36,6 +36,7 @@ export default defineEventHandler(async (event) => {
   if (b.html !== undefined) update.html = b.html
   if (b.design !== undefined) update.design = b.design as Json
   if (b.listId !== undefined) update.list_id = b.listId
+  if (b.templateId !== undefined) update.template_id = b.templateId
   if (b.segmentRules !== undefined)
     update.segment_rules = b.segmentRules as Json
   if (b.abVariants !== undefined) update.ab_variants = b.abVariants as Json

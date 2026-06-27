@@ -5,6 +5,7 @@ import { processCampaignDispatch } from './processors/campaign-dispatch.ts'
 import { processEmailSend } from './processors/email-send.ts'
 import { markSendFailed, finalizeCampaignIfComplete } from './lib/sends.ts'
 import { SES_DRY_RUN } from './lib/ses.ts'
+import { DEFAULT_SES_RATE_PER_SECOND } from '../shared/sending.ts'
 
 /**
  * BullMQ worker entry point (Railway: worker service).
@@ -14,7 +15,9 @@ import { SES_DRY_RUN } from './lib/ses.ts'
  */
 
 // SES per-second send quota (sandbox default is 14/s). Match it on the queue.
-const SES_RATE = Number(process.env.NUXT_SES_RATE_LIMIT_PER_SECOND ?? '14')
+const SES_RATE =
+  Number(process.env.NUXT_SES_RATE_LIMIT_PER_SECOND) ||
+  DEFAULT_SES_RATE_PER_SECOND
 
 const dispatchWorker = new Worker(
   QUEUE_NAMES.campaignDispatch,

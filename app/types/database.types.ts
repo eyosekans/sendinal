@@ -145,6 +145,7 @@ export interface Database {
           list_id: string | null
           segment_rules: Json
           ab_variants: Json
+          template_id: string | null
           status: CampaignStatus
           scheduled_at: string | null
           sent_at: string | null
@@ -162,6 +163,7 @@ export interface Database {
           list_id?: string | null
           segment_rules?: Json
           ab_variants?: Json
+          template_id?: string | null
           status?: CampaignStatus
           scheduled_at?: string | null
           sent_at?: string | null
@@ -179,6 +181,7 @@ export interface Database {
           list_id?: string | null
           segment_rules?: Json
           ab_variants?: Json
+          template_id?: string | null
           status?: CampaignStatus
           scheduled_at?: string | null
           sent_at?: string | null
@@ -190,6 +193,12 @@ export interface Database {
             foreignKeyName: 'campaigns_list_id_fkey'
             columns: ['list_id']
             referencedRelation: 'lists'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'campaigns_template_id_fkey'
+            columns: ['template_id']
+            referencedRelation: 'templates'
             referencedColumns: ['id']
           },
         ]

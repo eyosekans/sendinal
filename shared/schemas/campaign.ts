@@ -24,6 +24,9 @@ export const createCampaignSchema = z.object({
   html: z.string().default(''),
   design: z.record(z.string(), z.unknown()).default({}),
   listId: z.string().uuid().optional(),
+  // Source template this campaign was created from (if any). The campaign keeps
+  // its own copied html/design, so this is just a back-reference.
+  templateId: z.string().uuid().optional(),
   // Structured AND-rules (task 3.2). A legacy `{}` parses to an empty segment.
   segmentRules: segmentRulesSchema.default({ match: 'all', rules: [] }),
   // Subject-line A/B variants (task 3.3); empty = no test.

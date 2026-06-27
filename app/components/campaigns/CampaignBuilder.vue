@@ -12,6 +12,10 @@ import {
   type SegmentOperator,
   type AttributeField,
 } from '#shared/schemas'
+import {
+  DEFAULT_SES_RATE_PER_SECOND,
+  THROTTLE_WARNING_RECIPIENTS,
+} from '#shared/sending'
 
 /**
  * Full-screen campaign builder (task 2.1). Top bar + left settings panel +
@@ -46,6 +50,17 @@ const { data: lists } = await useFetch<ListItem[]>('/api/lists', {
   default: () => [],
 })
 
+// Sending-rate config for the throttle warning (task 3.5).
+const { data: sendCfg } = await useFetch<{
+  ratePerSecond: number
+  warnThreshold: number
+}>('/api/config/sending', {
+  default: () => ({
+    ratePerSecond: DEFAULT_SES_RATE_PER_SECOND,
+    warnThreshold: THROTTLE_WARNING_RECIPIENTS,
+  }),
+})
+
 const existing = props.campaignId
   ? (
       await useFetch<CampaignDetail>(`/api/campaigns/${props.campaignId}`)
@@ -65,6 +80,12 @@ const subject = ref(existing?.subject ?? seedTemplate?.subject ?? '')
 const fromName = ref(existing?.from_name ?? '')
 const fromEmail = ref(existing?.from_email ?? '')
 const listId = ref<string | null>(existing?.list_id ?? null)
+// Source template this campaign was built from. Seeded via
+// /campaigns/new?template=:id or set when "Load template" is used; persisted so
+// the template library can link back to its campaigns.
+const templateId = ref<string | null>(
+  existing?.template_id ?? props.templateId ?? null,
+)
 
 const initialDesign = (existing?.design ??
   seedTemplate?.design ??
@@ -224,6 +245,27 @@ function schedulePreview() {
   previewTimer = setTimeout(runPreview, 400)
 }
 
+/* ---------- throttle warning (task 3.5) ---------- */
+// Estimated recipients = the segment-filtered, sendable count (what dispatch
+// will actually send). A large send is throttled to the SES per-second rate, so
+// warn + show how long it will take once it exceeds the threshold.
+const recipientCount = computed(() => previewCount.value ?? 0)
+const throttleWarn = computed(
+  () => recipientCount.value > sendCfg.value.warnThreshold,
+)
+function formatSendDuration(totalSeconds: number): string {
+  const s = Math.ceil(totalSeconds)
+  if (s < 60) return `~${s}s`
+  const m = Math.round(s / 60)
+  if (m < 60) return `~${m} min`
+  const h = Math.floor(m / 60)
+  const rem = m % 60
+  return rem ? `~${h}h ${rem}m` : `~${h}h`
+}
+const estSendTime = computed(() =>
+  formatSendDuration(recipientCount.value / sendCfg.value.ratePerSecond),
+)
+
 /* ---------- A/B test (task 3.3, subject-only) ---------- */
 const existingAb = (() => {
   const p = abVariantsSchema.safeParse(existing?.ab_variants ?? [])
@@ -316,6 +358,7 @@ async function doSave() {
       ...(fromName.value.trim() ? { fromName: fromName.value.trim() } : {}),
       ...(fromEmail.value.trim() ? { fromEmail: fromEmail.value.trim() } : {}),
       ...(listId.value ? { listId: listId.value } : {}),
+      ...(templateId.value ? { templateId: templateId.value } : {}),
       segmentRules: { match: 'all' as const, rules: cleanRules.value },
       abVariants: abVariantsPayload.value,
     }
@@ -481,6 +524,7 @@ async function applyTemplate(id: string) {
     )
     editor.value?.loadDesign(tpl.design)
     if (!subject.value) subject.value = tpl.subject
+    templateId.value = id
     showTemplateLoad.value = false
     toast('success', 'Template applied')
     scheduleSave()
@@ -915,6 +959,21 @@ const TOAST_COLOR = {
                 of {{ (previewTotal ?? 0).toLocaleString('en-US') }} recipients
               </span>
               <span v-else class="seg-preview__muted">—</span>
+            </div>
+          </div>
+
+          <!-- Throttle warning for large sends (task 3.5) -->
+          <div v-if="throttleWarn" class="throttle-warn">
+            <i class="ph ph-warning" />
+            <div>
+              <div class="throttle-warn__title">
+                Large send — {{ recipientCount.toLocaleString('en-US') }}
+                recipients
+              </div>
+              <div class="throttle-warn__sub">
+                Throttled to {{ sendCfg.ratePerSecond }}/sec, this takes about
+                <strong>{{ estSendTime }}</strong> to finish sending.
+              </div>
             </div>
           </div>
 
@@ -1499,6 +1558,34 @@ const TOAST_COLOR = {
 }
 .seg-preview__muted {
   color: var(--gray-500);
+}
+
+/* throttle warning (task 3.5) */
+.throttle-warn {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 11px 13px;
+  border-radius: var(--radius-md);
+  background: var(--warning-100);
+  color: var(--warning-600);
+}
+.throttle-warn .ph {
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.throttle-warn__title {
+  font-weight: 500;
+  font-size: 13px;
+}
+.throttle-warn__sub {
+  font-size: 12px;
+  margin-top: 2px;
+  line-height: 1.5;
+}
+.throttle-warn__sub strong {
+  font-weight: 600;
 }
 
 .select {
