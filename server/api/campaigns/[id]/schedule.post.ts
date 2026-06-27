@@ -5,8 +5,8 @@ import { scheduleCampaignSchema } from '#shared/schemas'
 
 /**
  * POST /api/campaigns/:id/schedule
- * Set a future send time and move the campaign to `scheduled`. The
- * `scheduled-dispatcher` plugin picks it up once `scheduled_at <= NOW()`.
+ * Set a future send time and move the campaign to `scheduled`. The worker's
+ * scheduler (`worker/lib/scheduler.ts`) picks it up once `scheduled_at <= NOW()`.
  * Allowed from `draft` or `scheduled` (reschedule); the campaign must target a
  * list.
  */

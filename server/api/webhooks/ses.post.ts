@@ -4,8 +4,9 @@ import { verifySnsSignature, type SnsMessage } from '~~/server/utils/snsSignatur
 /**
  * POST /api/webhooks/ses — public endpoint for an Amazon SNS HTTPS subscription
  * carrying SES bounce/complaint notifications. (Our default wiring delivers to
- * SQS instead — see `server/plugins/sqs-poller.ts` — this route covers the
- * direct-subscription path and is kept public via nuxt.config `exclude`.)
+ * SQS instead, consumed by the worker's poller `worker/lib/sqs-poller.ts`; this
+ * route covers the direct-subscription path and is kept public via nuxt.config
+ * `exclude`.)
  *
  * Every message is authenticated by SNS signature before processing. SNS posts
  * with `Content-Type: text/plain`, so the body is read raw and parsed here.

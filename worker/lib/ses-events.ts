@@ -1,20 +1,17 @@
-import type { Json } from '~~/app/types/database.types'
-import { supabaseAdmin } from './supabaseAdmin'
+import type { Json } from '../../app/types/database.types.ts'
+import { supabase } from './supabase.ts'
 
 /**
- * Processes a single SES bounce/complaint notification (the inner SES message,
- * already unwrapped from any SNS envelope). This copy backs the HTTPS webhook
- * `POST /api/webhooks/ses` (the SNS direct-subscription path). The active
- * SES → SNS → SQS path runs in the worker (`worker/lib/ses-events.ts`); keep the
- * two in sync.
+ * Worker-side SES bounce/complaint processor — the active path now that the SQS
+ * poller runs in the worker (`worker/lib/sqs-poller.ts`).
+ *
+ * Mirrors `server/utils/sesEvents.ts` (the web webhook's copy for a direct SNS
+ * HTTPS subscription); keep the two in sync. Each lives in its own runtime so it
+ * can use that context's Supabase client without fragile cross-context imports.
  *
  * Idempotent: re-delivering the same notification is a no-op once the send is
- * already in its terminal bounced/complained state.
- *
- * Bounce policy: only **Permanent** (hard) bounces suppress the contact — a
- * Transient (soft) bounce is a temporary failure and must not permanently block
- * a valid address, so it is logged and acked without any DB change. As a result
- * an `email_events` row of type `bounced` always means a hard bounce.
+ * already terminal. Bounce policy: only **Permanent** (hard) bounces suppress
+ * the contact; Transient (soft) bounces are acked without any DB change.
  */
 
 interface SesRecipient {
@@ -38,10 +35,15 @@ interface SesNotification {
 
 export type SesEventResult =
   | { handled: false; reason: string }
-  | { handled: true; type: 'bounced' | 'complained'; sendId: string; deduped: boolean }
+  | {
+      handled: true
+      type: 'bounced' | 'complained'
+      sendId: string
+      deduped: boolean
+    }
   | { handled: true; type: 'transient' | 'ignored'; reason: string }
 
-/** Parse the kind of notification, tolerating both SES notification- and event-publishing shapes. */
+/** Notification kind, tolerating both SES notification- and event-publishing shapes. */
 function kindOf(n: SesNotification): string {
   return (n.notificationType ?? n.eventType ?? '').toLowerCase()
 }
@@ -78,17 +80,14 @@ export async function processSesNotification(
   const newStatus: 'bounced' | 'complained' =
     kind === 'bounce' ? 'bounced' : 'complained'
 
-  const db = supabaseAdmin()
-
   // The SES messageId maps 1:1 to a send (one email per recipient).
-  const { data: send, error: sErr } = await db
+  const { data: send, error: sErr } = await supabase
     .from('sends')
     .select('id, contact_id, status')
     .eq('ses_message_id', messageId)
     .maybeSingle()
   if (sErr) throw sErr
   if (!send) {
-    // Unknown messageId — e.g. a simulator test or a send we never recorded.
     return { handled: false, reason: `no send for messageId ${messageId}` }
   }
 
@@ -100,21 +99,21 @@ export async function processSesNotification(
   const nowIso = new Date().toISOString()
 
   // 1) Mark the send.
-  const { error: upSendErr } = await db
+  const { error: upSendErr } = await supabase
     .from('sends')
     .update({ status: newStatus })
     .eq('id', send.id)
   if (upSendErr) throw upSendErr
 
   // 2) Suppress the contact so future campaigns skip it.
-  const { error: upContactErr } = await db
+  const { error: upContactErr } = await supabase
     .from('contacts')
     .update({ status: newStatus, updated_at: nowIso })
     .eq('id', send.contact_id)
   if (upContactErr) throw upContactErr
 
   // 3) Append the event with the raw SES payload for auditing.
-  const { error: evErr } = await db.from('email_events').insert({
+  const { error: evErr } = await supabase.from('email_events').insert({
     send_id: send.id,
     type: newStatus,
     metadata: raw as Json,
@@ -126,16 +125,13 @@ export async function processSesNotification(
 }
 
 /**
- * Unwraps the SNS envelope (as delivered to SQS or POSTed by an SNS HTTPS
- * subscription) and processes the inner SES notification. Returns the result,
- * or `{ handled: true, type: 'ignored' }` for SNS control messages.
+ * Unwraps the SNS envelope (as delivered to SQS) and processes the inner SES
+ * notification. Returns `{ handled: true, type: 'ignored' }` for control messages.
  */
 export async function processSnsEnvelope(
   envelope: { Message?: string } | unknown,
 ): Promise<SesEventResult> {
   const env = envelope as { Message?: string }
-  // SNS wraps the SES notification as a JSON string in `Message`. If `Message`
-  // is absent, treat the payload itself as the SES notification (raw delivery).
   let inner: unknown = env
   if (env && typeof env.Message === 'string') {
     try {

@@ -1,32 +1,28 @@
-import { supabaseAdmin } from '~~/server/utils/supabaseAdmin'
+import type { Queue } from 'bullmq'
+import { supabase } from './supabase.ts'
 
 /**
- * Nitro plugin: every 60s, dispatch campaigns whose `scheduled_at` is due.
+ * Every 60s, dispatch campaigns whose `scheduled_at` is due. Runs in the worker
+ * (a persistent process) so it survives a serverless web tier on Vercel — the
+ * equivalent Nitro plugin was removed.
  *
- * Each due campaign is claimed atomically (`scheduled` → `sending` guarded by a
- * status-matched UPDATE), so concurrent web replicas can't double-dispatch; the
- * winner enqueues a `campaign.dispatch` job for the worker (same path as an
- * immediate send). On enqueue failure the claim is rolled back to `scheduled`.
+ * Each due campaign is claimed atomically (`scheduled` → `sending`, guarded by a
+ * status-matched UPDATE) so a restart/overlap can't double-dispatch; the winner
+ * enqueues a `campaign.dispatch` job (same path as an immediate send). On enqueue
+ * failure the claim is rolled back to `scheduled` for the next tick.
  *
- * Disabled when Redis isn't configured (local dev without a queue) or via
- * NUXT_SCHEDULER_DISABLED=true.
+ * Disabled via NUXT_SCHEDULER_DISABLED=true. Returns a `stop()` for shutdown.
  */
-export default defineNitroPlugin((nitroApp) => {
+export function startScheduler(dispatchQueue: Queue): { stop: () => void } {
   if (process.env.NUXT_SCHEDULER_DISABLED === 'true') {
     console.log('[scheduler] disabled via NUXT_SCHEDULER_DISABLED')
-    return
-  }
-  const redis = process.env.REDIS_URL ?? process.env.NUXT_REDIS_URL
-  if (!redis) {
-    console.log('[scheduler] disabled (REDIS_URL not set)')
-    return
+    return { stop: () => {} }
   }
 
   let running = true
 
   async function tick(): Promise<void> {
-    const db = supabaseAdmin()
-    const { data: due, error } = await db
+    const { data: due, error } = await supabase
       .from('campaigns')
       .select('id')
       .eq('status', 'scheduled')
@@ -35,8 +31,8 @@ export default defineNitroPlugin((nitroApp) => {
     if (error) throw error
 
     for (const c of due ?? []) {
-      // Atomic claim — only one worker/replica wins this row.
-      const { data: claimed, error: claimErr } = await db
+      // Atomic claim — only one tick wins this row.
+      const { data: claimed, error: claimErr } = await supabase
         .from('campaigns')
         .update({ status: 'sending', updated_at: new Date().toISOString() })
         .eq('id', c.id)
@@ -50,7 +46,7 @@ export default defineNitroPlugin((nitroApp) => {
       if (!claimed) continue // someone else claimed it
 
       try {
-        await getCampaignDispatchQueue().add(
+        await dispatchQueue.add(
           'dispatch',
           { campaignId: c.id },
           { removeOnComplete: true, removeOnFail: false },
@@ -58,7 +54,7 @@ export default defineNitroPlugin((nitroApp) => {
         console.log(`[scheduler] dispatched scheduled campaign ${c.id}`)
       } catch (err) {
         // Couldn't enqueue — return it to the schedule for the next tick.
-        await db
+        await supabase
           .from('campaigns')
           .update({ status: 'scheduled' })
           .eq('id', c.id)
@@ -80,9 +76,11 @@ export default defineNitroPlugin((nitroApp) => {
 
   console.log('[scheduler] started — dispatching due campaigns every 60s')
 
-  nitroApp.hooks.hook('close', () => {
-    running = false
-    clearInterval(timer)
-    clearTimeout(boot)
-  })
-})
+  return {
+    stop: () => {
+      running = false
+      clearInterval(timer)
+      clearTimeout(boot)
+    },
+  }
+}

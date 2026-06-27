@@ -3,22 +3,21 @@ import {
   ReceiveMessageCommand,
   DeleteMessageCommand,
 } from '@aws-sdk/client-sqs'
-import { processSnsEnvelope } from '~~/server/utils/sesEvents'
+import { processSnsEnvelope } from './ses-events.ts'
 
 /**
- * Nitro plugin: long-polls the SES bounce/complaint SQS queue and processes
- * each message. This is the default delivery path (SES → SNS → SQS); the HTTPS
- * webhook (`/api/webhooks/ses`) is the alternative for a direct SNS
- * subscription. Both funnel into `processSnsEnvelope`.
+ * Long-polls the SES bounce/complaint SQS queue and processes each message
+ * (SES → SNS → SQS). Runs in the worker (a persistent process) so it survives a
+ * serverless web tier on Vercel — the equivalent Nitro plugin was removed.
  *
  * Trust boundary: the queue's access policy only lets our SNS topic enqueue, so
  * messages are trusted and skip SNS signature verification. Processing is
- * idempotent, so concurrent consumers / redeliveries are safe.
+ * idempotent, so redeliveries are safe.
  *
- * Disabled automatically when the queue/region/credentials aren't configured
- * (e.g. local dev without AWS), or explicitly via NUXT_SQS_POLLER_DISABLED=true.
+ * Disabled when the queue/region/credentials aren't set (local dev without AWS)
+ * or via NUXT_SQS_POLLER_DISABLED=true. Returns a `stop()` for graceful shutdown.
  */
-export default defineNitroPlugin((nitroApp) => {
+export function startSqsPoller(): { stop: () => void } {
   const queueUrl = process.env.NUXT_SQS_QUEUE_URL
   const region = process.env.NUXT_AWS_REGION
   const accessKeyId = process.env.NUXT_AWS_ACCESS_KEY_ID
@@ -26,11 +25,13 @@ export default defineNitroPlugin((nitroApp) => {
 
   if (process.env.NUXT_SQS_POLLER_DISABLED === 'true') {
     console.log('[sqs-poller] disabled via NUXT_SQS_POLLER_DISABLED')
-    return
+    return { stop: () => {} }
   }
   if (!queueUrl || !region || !accessKeyId || !secretAccessKey) {
-    console.log('[sqs-poller] disabled (queue URL / region / AWS credentials not set)')
-    return
+    console.log(
+      '[sqs-poller] disabled (queue URL / region / AWS credentials not set)',
+    )
+    return { stop: () => {} }
   }
 
   const sqs = new SQSClient({
@@ -97,9 +98,10 @@ export default defineNitroPlugin((nitroApp) => {
 
   void loop()
 
-  // Stop cleanly on server shutdown so the process can exit.
-  nitroApp.hooks.hook('close', () => {
-    running = false
-    abort.abort()
-  })
-})
+  return {
+    stop: () => {
+      running = false
+      abort.abort()
+    },
+  }
+}

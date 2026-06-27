@@ -1,1 +1,1 @@
-{"root":["./index.ts","./lib/sends.ts","./lib/ses.ts","./lib/supabase.ts","./lib/tracking.ts","./processors/campaign-dispatch.ts","./processors/email-send.ts","./queues/connection.ts"],"version":"5.9.3"}
+{"root":["./index.ts","./lib/scheduler.ts","./lib/sends.ts","./lib/ses-events.ts","./lib/ses.ts","./lib/sqs-poller.ts","./lib/supabase.ts","./lib/tracking.ts","./processors/campaign-dispatch.ts","./processors/email-send.ts","./queues/connection.ts"],"version":"5.9.3"}

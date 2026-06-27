@@ -1,4 +1,4 @@
-import { Worker } from 'bullmq'
+import { Worker, Queue } from 'bullmq'
 import { connection } from './queues/connection.ts'
 import { QUEUE_NAMES, emailSendJobSchema } from '../shared/schemas/jobs.ts'
 import { processCampaignDispatch } from './processors/campaign-dispatch.ts'
@@ -6,6 +6,8 @@ import { processEmailSend } from './processors/email-send.ts'
 import { markSendFailed, finalizeCampaignIfComplete } from './lib/sends.ts'
 import { SES_DRY_RUN } from './lib/ses.ts'
 import { DEFAULT_SES_RATE_PER_SECOND } from '../shared/sending.ts'
+import { startScheduler } from './lib/scheduler.ts'
+import { startSqsPoller } from './lib/sqs-poller.ts'
 
 /**
  * BullMQ worker entry point (Railway: worker service).
@@ -34,6 +36,17 @@ const emailWorker = new Worker(QUEUE_NAMES.emailSend, processEmailSend, {
 })
 
 const workers: Worker[] = [dispatchWorker, emailWorker]
+
+// Producer for the scheduler to enqueue due scheduled campaigns. A dedicated
+// connection (Workers above hold blocking connections) per BullMQ guidance.
+const dispatchQueue = new Queue(QUEUE_NAMES.campaignDispatch, {
+  connection: connection.duplicate(),
+})
+
+// Background loops that used to be Nitro plugins on the web tier — moved here so
+// they keep running when the web app is a serverless (Vercel) deployment.
+const scheduler = startScheduler(dispatchQueue)
+const sqsPoller = startSqsPoller()
 
 for (const worker of workers) {
   worker.on('ready', () => console.log(`[worker] ${worker.name} ready`))
@@ -71,7 +84,10 @@ console.log(
 /** Graceful shutdown — drain active jobs before exit (hardened in 4.6). */
 async function shutdown(signal: string) {
   console.log(`[worker] received ${signal}, shutting down…`)
+  scheduler.stop()
+  sqsPoller.stop()
   await Promise.all(workers.map((w) => w.close()))
+  await dispatchQueue.close()
   await connection.quit()
   process.exit(0)
 }

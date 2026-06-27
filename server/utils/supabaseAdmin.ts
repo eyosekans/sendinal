@@ -3,8 +3,8 @@ import type { Database } from '~~/app/types/database.types'
 
 /**
  * Service-role Supabase client for trusted server-side flows that run without a
- * user session — the SES webhook (`/api/webhooks/ses`) and the SQS poller
- * plugin. Bypasses RLS, so it must never be reached from an unauthenticated,
+ * user session — currently the SES webhook (`/api/webhooks/ses`). Bypasses RLS,
+ * so it must never be reached from an unauthenticated,
  * user-facing route. Reads the same env chain as the worker's client
  * (`worker/lib/supabase.ts`) to stay consistent. Created lazily and reused.
  */

@@ -1,12 +1,9 @@
 [build]
 builder = "nixpacks"
 
-# Three services run from this single repo.
-
-[[services]]
-name = "web"
-startCommand = "node .output/server/index.mjs"
-healthcheckPath = "/api/health"
+# Railway hosts the backend: the BullMQ worker + Redis. The Nuxt web app is
+# deployed to Vercel (serverless), so the scheduler + SQS poller that used to run
+# as Nitro plugins now live in the worker (worker/lib/{scheduler,sqs-poller}.ts).
 
 [[services]]
 name = "worker"
