@@ -1,15 +1,19 @@
+# Railway runs the BACKEND only: the BullMQ worker (this repo) + a Redis
+# database (added separately in the dashboard: New → Database → Add Redis). The
+# Nuxt web app is on Vercel.
+#
+# Railway's config-as-code applies to ONE service and has no `[[services]]`
+# array — this file configures the worker service. Config here takes precedence
+# over the dashboard, so clear any Custom Build/Start Command there to avoid
+# confusion.
+
 [build]
 builder = "nixpacks"
+# The worker executes TypeScript directly (Node 22+ native), so it only needs
+# dependencies — skip the Nuxt app build (that artifact ships to Vercel, not here).
+buildCommand = "echo 'worker service — no build step'"
 
-# Railway hosts the backend: the BullMQ worker + Redis. The Nuxt web app is
-# deployed to Vercel (serverless), so the scheduler + SQS poller that used to run
-# as Nitro plugins now live in the worker (worker/lib/{scheduler,sqs-poller}.ts).
-
-[[services]]
-name = "worker"
-# Node's native TypeScript support runs the worker entry directly.
+[deploy]
 startCommand = "node worker/index.ts"
-
-[[services]]
-name = "redis"
-plugin = "redis"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
