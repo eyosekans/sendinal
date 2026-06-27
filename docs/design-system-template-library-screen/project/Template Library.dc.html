@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<style>
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{font-family:'Inter',system-ui,sans-serif;color:#3d3830;background:#f8f7f5;-webkit-font-smoothing:antialiased;}
+::selection{background:#c8ebe4;}
+.ph{display:inline-block;line-height:1;}
+button{font-family:inherit;cursor:pointer;}
+input,textarea{font-family:'Inter',system-ui,sans-serif;}
+input::placeholder,textarea::placeholder{color:#a09990;}
+input:focus,textarea:focus{outline:2px solid #c8ebe4;outline-offset:0;border-color:#1a7a6e;}
+.mp-scroll::-webkit-scrollbar{width:11px;height:11px;}
+.mp-scroll::-webkit-scrollbar-thumb{background:#d8d3cc;border-radius:8px;border:3px solid #f8f7f5;}
+.mp-scroll::-webkit-scrollbar-track{background:transparent;}
+@keyframes mp-pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+@keyframes mp-shimmer{0%{background-position:-280px 0;}100%{background-position:280px 0;}}
+@keyframes mp-modal-in{from{opacity:0;transform:scale(.96);}to{opacity:1;transform:scale(1);}}
+@keyframes mp-fade-in{from{opacity:0;}to{opacity:1;}}
+@keyframes mp-toast-in{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
+@keyframes mp-expand{from{opacity:0;transform:translateY(-5px);}to{opacity:1;transform:translateY(0);}}
+@media (prefers-reduced-motion: reduce){*{transition-duration:.01ms !important;animation-duration:.01ms !important;}}
+</style>
+</helmet>
+
+<div style="min-height:100vh;width:100%;background:#f8f7f5;color:#3d3830;font-family:'Inter',system-ui,sans-serif;font-size:14px;">
+
+  <!-- ================= SIDEBAR ================= -->
+  <aside style="position:fixed;top:0;left:0;z-index:20;width:240px;height:100vh;background:#f0eeeb;border-right:1px solid #e2ded9;display:flex;flex-direction:column;">
+    <div style="height:64px;flex-shrink:0;display:flex;align-items:center;gap:11px;padding:0 18px;">
+      <div style="width:34px;height:34px;border-radius:9px;background:#1a7a6e;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 1px 2px rgba(9,47,41,.35);">
+        <i class="ph ph-envelope-simple" style="font-size:19px;color:#fff;"></i>
+      </div>
+      <div style="display:flex;flex-direction:column;line-height:1.15;">
+        <span style="font-family:'DM Sans',sans-serif;font-size:16px;font-weight:500;color:#0f5247;">MailPrecision</span>
+        <span style="font-size:11px;color:#787068;">Internal Marketing</span>
+      </div>
+    </div>
+
+    <nav style="flex:1;overflow-y:auto;padding:14px 12px;display:flex;flex-direction:column;gap:2px;">
+      <div style="font-size:11px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:#a09990;padding:8px 10px 6px;">Workspace</div>
+      <button style="display:flex;align-items:center;gap:11px;height:38px;padding:0 10px;border:none;border-left:2px solid transparent;background:transparent;border-radius:7px;color:#534d46;font-size:13.5px;text-align:left;" style-hover="background:#e2ded9;color:#28241e;"><i class="ph ph-paper-plane-tilt" style="font-size:20px;color:#787068;"></i>Campaigns</button>
+      <button style="display:flex;align-items:center;gap:11px;height:38px;padding:0 10px;border:none;border-left:2px solid transparent;background:transparent;border-radius:7px;color:#534d46;font-size:13.5px;text-align:left;" style-hover="background:#e2ded9;color:#28241e;"><i class="ph ph-users" style="font-size:20px;color:#787068;"></i>Contacts</button>
+      <button style="display:flex;align-items:center;gap:11px;height:38px;padding:0 10px;border:none;border-left:2px solid transparent;background:transparent;border-radius:7px;color:#534d46;font-size:13.5px;text-align:left;" style-hover="background:#e2ded9;color:#28241e;"><i class="ph ph-list-bullets" style="font-size:20px;color:#787068;"></i>Lists</button>
+      <button style="display:flex;align-items:center;gap:11px;height:38px;padding:0 8px 0 10px;border:none;border-left:2px solid #1a7a6e;background:#c8ebe4;border-radius:7px;color:#0f5247;font-size:13.5px;font-weight:500;text-align:left;"><i class="ph ph-layout" style="font-size:20px;color:#1a7a6e;"></i>Templates</button>
+      <button style="display:flex;align-items:center;gap:11px;height:38px;padding:0 10px;border:none;border-left:2px solid transparent;background:transparent;border-radius:7px;color:#534d46;font-size:13.5px;text-align:left;" style-hover="background:#e2ded9;color:#28241e;"><i class="ph ph-chart-line-up" style="font-size:20px;color:#787068;"></i>Analytics</button>
+      <button style="display:flex;align-items:center;gap:11px;height:38px;padding:0 10px;border:none;border-left:2px solid transparent;background:transparent;border-radius:7px;color:#534d46;font-size:13.5px;text-align:left;" style-hover="background:#e2ded9;color:#28241e;"><i class="ph ph-gear" style="font-size:20px;color:#787068;"></i>Settings</button>
+    </nav>
+
+    <div style="flex-shrink:0;border-top:1px solid #e2ded9;padding:12px;display:flex;align-items:center;gap:10px;">
+      <div style="width:32px;height:32px;border-radius:50%;background:#1a7a6e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;flex-shrink:0;">AQ</div>
+      <div style="display:flex;flex-direction:column;line-height:1.25;min-width:0;">
+        <span style="font-size:13px;font-weight:500;color:#28241e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Avery Quinn</span>
+        <span style="font-size:11px;color:#787068;">Marketing Ops</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ================= MAIN ================= -->
+  <main style="margin-left:240px;min-height:100vh;background:#f8f7f5;">
+
+    <!-- top bar -->
+    <header style="height:64px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 32px;background:#fbfaf8;border-bottom:1px solid #e2ded9;position:sticky;top:0;z-index:30;">
+      <span style="font-family:'DM Sans',sans-serif;font-size:19px;font-weight:500;color:#28241e;">Templates</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button aria-label="Notifications" title="Notifications" style="position:relative;width:38px;height:38px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;border-radius:8px;color:#534d46;" style-hover="background:#f0eeeb;color:#28241e;"><i class="ph ph-bell" style="font-size:20px;"></i><span style="position:absolute;top:8px;right:9px;width:7px;height:7px;border-radius:50%;background:#c0272d;border:1.5px solid #fbfaf8;"></span></button>
+        <button aria-label="Help" title="Help" style="width:38px;height:38px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;border-radius:8px;color:#534d46;" style-hover="background:#f0eeeb;color:#28241e;"><i class="ph ph-question" style="font-size:20px;"></i></button>
+        <div style="width:34px;height:34px;border-radius:50%;background:#0f5247;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;margin-left:4px;">AQ</div>
+      </div>
+    </header>
+
+    <!-- scroll area -->
+    <div style="padding:32px;">
+      <div style="max-width:1400px;margin:0 auto;">
+
+        <!-- page header -->
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap;">
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            <h1 style="margin:0;font-family:'DM Sans',sans-serif;font-size:28px;font-weight:500;line-height:1.2;color:#18150f;">{{titleText}}</h1>
+            <p style="margin:0;font-size:13px;color:#787068;">{{subtitle}}</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <sc-if value="{{showLibraryActions}}" hint-placeholder-val="{{true}}">
+              <button onClick="{{onImport}}" style="display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 15px;background:#fff;color:#3d3830;border:1px solid #e2ded9;border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:#f8f7f5;border-color:#c9c4bd;"><i class="ph ph-code" style="font-size:16px;color:#787068;"></i>Import HTML</button>
+              <button onClick="{{onNewTemplate}}" style="display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 16px;background:#1a7a6e;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:500;box-shadow:0 1px 2px rgba(9,47,41,.25);" style-hover="background:#0f5247;" style-active="background:#092f29;transform:scale(.985);"><i class="ph ph-plus" style="font-size:16px;"></i>New template</button>
+            </sc-if>
+            <sc-if value="{{isPicker}}" hint-placeholder-val="{{false}}">
+              <button onClick="{{onStartBlankHeader}}" style="display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 15px;background:transparent;color:#534d46;border:none;border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:#f0eeeb;color:#28241e;"><i class="ph ph-file-dashed" style="font-size:16px;"></i>Start blank</button>
+            </sc-if>
+          </div>
+        </div>
+
+        <!-- toolbar -->
+        <div style="margin-top:24px;background:#fff;border:1px solid #e2ded9;border-radius:10px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;box-shadow:0 1px 3px rgba(0,0,0,.05);">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div style="position:relative;width:248px;max-width:100%;">
+              <i class="ph ph-magnifying-glass" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:16px;color:#a09990;pointer-events:none;"></i>
+              <input ref="{{searchRef}}" value="{{query}}" onInput="{{onSearch}}" placeholder="Search templates…" aria-label="Search templates" style="width:100%;height:36px;padding:0 30px 0 34px;background:#fff;border:1px solid #e2ded9;border-radius:6px;font-size:14px;color:#28241e;"/>
+              <sc-if value="{{hasQuery}}" hint-placeholder-val="{{false}}">
+                <button onClick="{{onClearSearch}}" aria-label="Clear search" style="position:absolute;right:7px;top:50%;transform:translateY(-50%);width:22px;height:22px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;border-radius:5px;color:#787068;" style-hover="background:#f0eeeb;"><i class="ph ph-x" style="font-size:13px;"></i></button>
+              </sc-if>
+            </div>
+            <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
+              <sc-for list="{{pills}}" as="pill" hint-placeholder-count="6">
+                <sc-if value="{{pill.active}}" hint-placeholder-val="{{true}}">
+                  <button onClick="{{pill.onClick}}" style="height:34px;padding:0 15px;border-radius:9999px;font-size:13px;font-weight:500;white-space:nowrap;background:#1a7a6e;color:#fff;border:1px solid #1a7a6e;">{{pill.label}}</button>
+                </sc-if>
+                <sc-if value="{{pill.inactive}}" hint-placeholder-val="{{false}}">
+                  <button onClick="{{pill.onClick}}" style="height:34px;padding:0 15px;border-radius:9999px;font-size:13px;font-weight:500;white-space:nowrap;background:#fff;color:#3d3830;border:1px solid #e2ded9;transition:background-color 100ms ease,border-color 100ms ease;" style-hover="background:#f8f7f5;border-color:#c9c4bd;">{{pill.label}}</button>
+                </sc-if>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="position:relative;">
+              <button onClick="{{onToggleSort}}" style="display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 12px;background:#fff;border:1px solid #e2ded9;border-radius:6px;color:#3d3830;font-size:13px;font-weight:500;" style-hover="background:#f8f7f5;border-color:#c9c4bd;"><i class="ph ph-arrows-down-up" style="font-size:15px;color:#787068;"></i><span style="color:#787068;font-weight:400;">Sort:</span>{{sortLabel}}<i class="ph ph-caret-down" style="font-size:12px;color:#787068;"></i></button>
+              <sc-if value="{{sortMenuOpen}}" hint-placeholder-val="{{false}}">
+                <div style="position:absolute;top:42px;right:0;z-index:50;min-width:172px;background:#fff;border:1px solid #e2ded9;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.10),0 2px 8px rgba(0,0,0,.06);padding:5px;animation:mp-expand 120ms ease-out;">
+                  <sc-for list="{{sortOptions}}" as="opt" hint-placeholder-count="3">
+                    <button onClick="{{opt.onClick}}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;border:none;background:transparent;border-radius:6px;padding:8px 9px;font-size:13px;color:#3d3830;" style-hover="background:#f0eeeb;">{{opt.label}}<sc-if value="{{opt.active}}" hint-placeholder-val="{{false}}"><i class="ph ph-check" style="font-size:14px;color:#1a7a6e;"></i></sc-if></button>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+            <div style="display:inline-flex;align-items:center;gap:2px;background:#f0eeeb;border:1px solid #e2ded9;border-radius:8px;padding:3px;">
+              <button onClick="{{onGridView}}" aria-label="Grid view" title="Grid view" style="width:32px;height:30px;display:flex;align-items:center;justify-content:center;border:none;border-radius:6px;{{gridSeg}}"><i class="ph ph-squares-four" style="font-size:18px;"></i></button>
+              <button onClick="{{onListView}}" aria-label="List view" title="List view" style="width:32px;height:30px;display:flex;align-items:center;justify-content:center;border:none;border-radius:6px;{{listSeg}}"><i class="ph ph-rows" style="font-size:18px;"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- content -->
+        <div style="margin-top:24px;">
+
+          <!-- loading skeletons -->
+          <sc-if value="{{loading}}" hint-placeholder-val="{{true}}">
+            <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;">
+              <sc-for list="{{skeletons}}" as="sk" hint-placeholder-count="8">
+                <div style="flex:1 1 244px;max-width:372px;min-width:0;background:#fff;border:1px solid #e2ded9;border-radius:10px;overflow:hidden;">
+                  <div style="width:100%;height:336px;background:linear-gradient(90deg,#f0eeeb 25%,#f8f7f5 50%,#f0eeeb 75%);background-size:280px 100%;animation:mp-shimmer 1.4s ease infinite;"></div>
+                  <div style="padding:14px;display:flex;flex-direction:column;gap:11px;">
+                    <div style="height:14px;width:72%;border-radius:4px;background:linear-gradient(90deg,#f0eeeb 25%,#f8f7f5 50%,#f0eeeb 75%);background-size:280px 100%;animation:mp-shimmer 1.4s ease infinite;"></div>
+                    <div style="height:18px;width:42%;border-radius:9999px;background:linear-gradient(90deg,#f0eeeb 25%,#f8f7f5 50%,#f0eeeb 75%);background-size:280px 100%;animation:mp-shimmer 1.4s ease infinite;"></div>
+                    <div style="height:12px;width:56%;border-radius:4px;background:linear-gradient(90deg,#f0eeeb 25%,#f8f7f5 50%,#f0eeeb 75%);background-size:280px 100%;animation:mp-shimmer 1.4s ease infinite;"></div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <!-- empty / no results -->
+          <sc-if value="{{isEmpty}}" hint-placeholder-val="{{false}}">
+            <div style="max-width:440px;margin:64px auto;text-align:center;display:flex;flex-direction:column;align-items:center;gap:0;animation:mp-fade-in 150ms ease;">
+              <div style="width:64px;height:64px;border-radius:16px;background:#f0eeeb;border:1px solid #e2ded9;display:flex;align-items:center;justify-content:center;margin-bottom:24px;"><i class="ph ph-magnifying-glass" style="font-size:28px;color:#c9c4bd;"></i></div>
+              <h2 style="margin:0 0 12px;font-family:'DM Sans',sans-serif;font-size:18px;font-weight:500;color:#28241e;">{{emptyTitle}}</h2>
+              <p style="margin:0 0 24px;font-size:13px;line-height:1.6;color:#787068;">{{emptySub}}</p>
+              <button onClick="{{onClearSearch}}" style="display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 16px;background:#fff;color:#3d3830;border:1px solid #e2ded9;border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:#f8f7f5;border-color:#c9c4bd;">Clear filters</button>
+            </div>
+          </sc-if>
+
+          <!-- GRID view -->
+          <sc-if value="{{showGrid}}" hint-placeholder-val="{{false}}">
+            <div style="display:flex;flex-wrap:wrap;gap:{{gridGap}};align-items:flex-start;animation:mp-fade-in 150ms ease;">
+              <sc-for list="{{cards}}" as="card" hint-placeholder-count="8">
+                <div onMouseEnter="{{card.onEnter}}" onMouseLeave="{{card.onLeave}}" style="position:relative;flex:1 1 {{card.basis}};max-width:372px;min-width:0;background:#fff;border:1px solid {{card.borderColor}};border-radius:10px;box-shadow:{{card.boxShadow}};overflow:visible;display:flex;flex-direction:column;transition:border-color 100ms ease,box-shadow 150ms ease;">
+
+                  <!-- preview -->
+                  <div style="position:relative;width:100%;height:336px;background:{{card.tintBg}};border-bottom:1px solid #e2ded9;overflow:hidden;border-radius:9px 9px 0 0;">
+                    <sc-if value="{{card.striped}}" hint-placeholder-val="{{true}}">
+                      <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(135deg,rgba(40,36,30,.05) 0,rgba(40,36,30,.05) 1px,transparent 1px,transparent 10px);"></div>
+                      <div style="position:absolute;top:0;left:0;right:0;height:21%;background:{{card.tintLine}};opacity:.16;"></div>
+                      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:0 14px;">
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.2px;color:{{card.catText}};background:#fff;border:1px solid #e2ded9;border-radius:6px;padding:5px 11px;text-align:center;">{{card.layoutLabel}}</span>
+                      </div>
+                      <div style="position:absolute;bottom:9px;right:11px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#a09990;">{{card.dim}}</div>
+                    </sc-if>
+                    <sc-if value="{{card.skeleton}}" hint-placeholder-val="{{false}}">
+                      <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(135deg,rgba(40,36,30,.04) 0,rgba(40,36,30,.04) 1px,transparent 1px,transparent 11px);"></div>
+                      <div style="position:absolute;inset:16px;background:#fff;border:1px solid #e2ded9;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:8px;">
+                        <div style="height:11px;width:58%;border-radius:3px;background:#e2ded9;"></div>
+                        <div style="height:62px;border-radius:5px;background:repeating-linear-gradient(135deg,#f0eeeb 0,#f0eeeb 6px,#f8f7f5 6px,#f8f7f5 12px);border:1px solid #f0eeeb;"></div>
+                        <div style="height:7px;width:100%;border-radius:3px;background:#eceae6;"></div>
+                        <div style="height:7px;width:92%;border-radius:3px;background:#eceae6;"></div>
+                        <div style="height:7px;width:80%;border-radius:3px;background:#eceae6;"></div>
+                        <div style="height:22px;width:46%;border-radius:5px;background:{{card.catDot}};margin-top:auto;"></div>
+                      </div>
+                    </sc-if>
+
+                    <!-- hover overlay -->
+                    <div style="position:absolute;inset:0;background:rgba(24,21,15,.6);display:flex;align-items:center;justify-content:center;gap:10px;opacity:{{card.overlayOpacity}};pointer-events:{{card.overlayPe}};transition:opacity 150ms ease;">
+                      <button onClick="{{card.onPreview}}" style="display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.6);border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:rgba(255,255,255,.14);border-color:#fff;"><i class="ph ph-eye" style="font-size:15px;"></i>Preview</button>
+                      <button onClick="{{card.onPrimaryAction}}" style="display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;background:#fff;color:#0f5247;border:1px solid #fff;border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:#edf7f5;"><i class="ph ph-pencil-simple" style="font-size:15px;"></i>{{card.hoverPrimaryLabel}}</button>
+                    </div>
+                  </div>
+
+                  <!-- body -->
+                  <div style="padding:13px 14px 15px;display:flex;flex-direction:column;gap:9px;">
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+                      <sc-if value="{{card.isRenaming}}" hint-placeholder-val="{{false}}">
+                        <input value="{{card.renameValue}}" onInput="{{card.onRenameInput}}" onKeyDown="{{card.onRenameKey}}" onBlur="{{card.onRenameCommit}}" autoFocus="{{true}}" style="flex:1;min-width:0;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;color:#28241e;border:1px solid #1a7a6e;border-radius:6px;padding:3px 7px;"/>
+                      </sc-if>
+                      <sc-if value="{{card.isNotRenaming}}" hint-placeholder-val="{{true}}">
+                        <span title="{{card.name}}" style="flex:1;min-width:0;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;line-height:1.3;color:#28241e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{card.name}}</span>
+                      </sc-if>
+                      <div style="position:relative;flex-shrink:0;">
+                        <button onClick="{{card.onMenu}}" aria-label="More actions" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;border-radius:6px;color:#787068;" style-hover="background:#f0eeeb;color:#28241e;"><i class="ph ph-dots-three-vertical" style="font-size:18px;"></i></button>
+                        <sc-if value="{{card.isMenuOpen}}" hint-placeholder-val="{{false}}">
+                          <div style="position:absolute;top:32px;right:0;z-index:50;min-width:196px;background:#fff;border:1px solid #e2ded9;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.10),0 2px 8px rgba(0,0,0,.06);padding:5px;animation:mp-expand 120ms ease-out;">
+                            <button onClick="{{card.onMenuEdit}}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:transparent;border-radius:6px;padding:8px 9px;font-size:13px;color:#3d3830;" style-hover="background:#f0eeeb;"><i class="ph ph-pencil-simple" style="font-size:16px;color:#787068;"></i>Edit</button>
+                            <button onClick="{{card.onMenuDuplicate}}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:transparent;border-radius:6px;padding:8px 9px;font-size:13px;color:#3d3830;" style-hover="background:#f0eeeb;"><i class="ph ph-copy" style="font-size:16px;color:#787068;"></i>Duplicate</button>
+                            <sc-if value="{{card.showManage}}" hint-placeholder-val="{{true}}">
+                              <button onClick="{{card.onMenuRename}}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:transparent;border-radius:6px;padding:8px 9px;font-size:13px;color:#3d3830;" style-hover="background:#f0eeeb;"><i class="ph ph-cursor-text" style="font-size:16px;color:#787068;"></i>Rename</button>
+                            </sc-if>
+                            <button onClick="{{card.onMenuUse}}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:transparent;border-radius:6px;padding:8px 9px;font-size:13px;color:#3d3830;" style-hover="background:#f0eeeb;"><i class="ph ph-paper-plane-tilt" style="font-size:16px;color:#787068;"></i>Use in new campaign</button>
+                            <sc-if value="{{card.showManage}}" hint-placeholder-val="{{true}}">
+                              <div style="height:1px;background:#f0eeeb;margin:5px 6px;"></div>
+                              <button onClick="{{card.onMenuDelete}}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:transparent;border-radius:6px;padding:8px 9px;font-size:13px;color:#c0272d;" style-hover="background:#fde8e8;"><i class="ph ph-trash" style="font-size:16px;color:#c0272d;"></i>Delete</button>
+                            </sc-if>
+                          </div>
+                        </sc-if>
+                      </div>
+                    </div>
+
+                    <sc-if value="{{card.isNotDeleting}}" hint-placeholder-val="{{true}}">
+                      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <span style="display:inline-flex;align-items:center;gap:6px;background:{{card.catBg}};color:{{card.catText}};border-radius:9999px;padding:3px 10px;font-size:11px;font-weight:500;letter-spacing:.4px;"><span style="width:6px;height:6px;border-radius:50%;background:{{card.catDot}};"></span>{{card.category}}</span>
+                        <span style="font-size:12.5px;color:#787068;">· {{card.edited}}</span>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:#787068;"><i class="ph {{card.usedIcon}}" style="font-size:14px;color:#a09990;"></i>{{card.usedLabel}}</div>
+                    </sc-if>
+
+                    <sc-if value="{{card.isDeleting}}" hint-placeholder-val="{{false}}">
+                      <div style="background:#fffafa;border:1px solid #fde8e8;border-radius:8px;padding:11px 12px;display:flex;flex-direction:column;gap:8px;animation:mp-expand 180ms ease-out;">
+                        <div style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:#28241e;">Delete “{{card.name}}”?</div>
+                        <div style="font-size:12px;color:#787068;">This cannot be undone.</div>
+                        <sc-if value="{{card.showActiveWarning}}" hint-placeholder-val="{{false}}">
+                          <div style="font-size:11.5px;color:#92620a;background:#fef3d0;border-radius:6px;padding:7px 9px;line-height:1.5;">{{card.activeWarnText}}</div>
+                        </sc-if>
+                        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:2px;">
+                          <button onClick="{{card.onDeleteCancel}}" style="height:30px;padding:0 12px;background:#fff;color:#3d3830;border:1px solid #e2ded9;border-radius:6px;font-size:12.5px;font-weight:500;" style-hover="background:#f8f7f5;">Cancel</button>
+                          <button onClick="{{card.onDeleteConfirm}}" style="height:30px;padding:0 12px;background:#c0272d;color:#fff;border:none;border-radius:6px;font-size:12.5px;font-weight:500;" style-hover="background:#a31f24;">Delete</button>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <!-- LIST view -->
+          <sc-if value="{{showList}}" hint-placeholder-val="{{false}}">
+            <div style="background:#fff;border:1px solid #e2ded9;border-radius:10px;overflow:visible;animation:mp-fade-in 150ms ease;box-shadow:0 1px 3px rgba(0,0,0,.05);">
+              <div style="display:grid;grid-template-columns:62px 1fr 156px 132px 120px 88px;align-items:center;height:40px;padding:0 16px;background:#f8f7f5;border-bottom:1px solid #e2ded9;font-size:11px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:#787068;border-radius:10px 10px 0 0;">
+                <div></div><div>Name</div><div>Category</div><div>Last edited</div><div>Used in</div><div style="text-align:right;">Actions</div>
+              </div>
+              <sc-for list="{{cards}}" as="card" hint-placeholder-count="6">
+                <div onMouseEnter="{{card.onEnter}}" onMouseLeave="{{card.onLeave}}" style="position:relative;display:grid;grid-template-columns:62px 1fr 156px 132px 120px 88px;align-items:center;min-height:56px;padding:8px 16px;border-bottom:1px solid #f0eeeb;background:{{card.rowBg}};transition:background-color 80ms ease;">
+                  <div style="width:40px;height:52px;border-radius:5px;overflow:hidden;position:relative;background:{{card.tintBg}};border:1px solid #e2ded9;">
+                    <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(135deg,rgba(40,36,30,.05) 0,rgba(40,36,30,.05) 1px,transparent 1px,transparent 7px);"></div>
+                    <div style="position:absolute;top:0;left:0;right:0;height:13px;background:{{card.tintLine}};opacity:.4;"></div>
+                    <div style="position:absolute;top:20px;left:6px;right:14px;height:3px;border-radius:2px;background:#c9c4bd;"></div>
+                    <div style="position:absolute;top:27px;left:6px;right:9px;height:3px;border-radius:2px;background:#d8d3cc;"></div>
+                  </div>
+                  <div style="min-width:0;padding-right:14px;">
+                    <sc-if value="{{card.isRenaming}}" hint-placeholder-val="{{false}}">
+                      <input value="{{card.renameValue}}" onInput="{{card.onRenameInput}}" onKeyDown="{{card.onRenameKey}}" onBlur="{{card.onRenameCommit}}" autoFocus="{{true}}" style="width:100%;max-width:300px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;color:#28241e;border:1px solid #1a7a6e;border-radius:6px;padding:3px 7px;"/>
+                    </sc-if>
+                    <sc-if value="{{card.isNotRenaming}}" hint-placeholder-val="{{true}}">
+                      <span title="{{card.name}}" style="display:block;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;color:#28241e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{card.name}}</span>
+                    </sc-if>
+                  </div>
+                  <div><span style="display:inline-flex;align-items:center;gap:6px;background:{{card.catBg}};color:{{card.catText}};border-radius:9999px;padding:3px 10px;font-size:11px;font-weight:500;letter-spacing:.4px;"><span style="width:6px;height:6px;border-radius:50%;background:{{card.catDot}};"></span>{{card.category}}</span></div>
+                  <div style="font-size:13px;color:#787068;">{{card.edited}}</div>
+                  <div style="font-size:13px;color:#787068;display:flex;align-items:center;gap:6px;"><i class="ph {{card.usedIcon}}" style="font-size:14px;color:#a09990;"></i>{{card.usedShort}}</div>
+                  <div style="display:flex;align-items:center;justify-content:flex-end;gap:2px;opacity:{{card.rowActionsOpacity}};transition:opacity 120ms ease;">
+                    <button onClick="{{card.onPreview}}" title="Preview" aria-label="Preview" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;border-radius:6px;color:#787068;" style-hover="background:#f0eeeb;color:#28241e;"><i class="ph ph-eye" style="font-size:17px;"></i></button>
+                    <div style="position:relative;">
+                      <button onClick="{{card.onMenu}}" title="More" aria-label="More actions" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;border-radius:6px;color:#787068;" style-hover="background:#f0eeeb;color:#28241e;"><i class="ph ph-dots-three-vertical" style="font-size:17px;"></i></button>
+                      <sc-if value="{{card.isMenuOpen}}" hint-placeholder-val="{{false}}">
+                        <div style="position:absolute;top:34px;right:0;z-index:50;min-width:196px;background:#fff;border:1px solid #e2ded9;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.10),0 2px 8px rgba(0,0,0,.06);padding:5px;animation:mp-expand 120ms ease-out;">
+                          <button onClick="{{card.onMenuEdit}}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:transparent;border-radius:6px;padding:8px 9px;font-size:13px;color:#3d3830;" style-hover="background:#f0eeeb;"><i class="ph ph-pencil-simple" style="font-size:16px;color:#787068;"></i>Edit</button>
+                          <button onClick="{{card.onMenuDuplicate}}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:transparent;border-radius:6px;padding:8px 9px;font-size:13px;color:#3d3830;" style-hover="background:#f0eeeb;"><i class="ph ph-copy" style="font-size:16px;color:#787068;"></i>Duplicate</button>
+                          <sc-if value="{{card.showManage}}" hint-placeholder-val="{{true}}">
+                            <button onClick="{{card.onMenuRename}}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:transparent;border-radius:6px;padding:8px 9px;font-size:13px;color:#3d3830;" style-hover="background:#f0eeeb;"><i class="ph ph-cursor-text" style="font-size:16px;color:#787068;"></i>Rename</button>
+                          </sc-if>
+                          <button onClick="{{card.onMenuUse}}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:transparent;border-radius:6px;padding:8px 9px;font-size:13px;color:#3d3830;" style-hover="background:#f0eeeb;"><i class="ph ph-paper-plane-tilt" style="font-size:16px;color:#787068;"></i>Use in new campaign</button>
+                          <sc-if value="{{card.showManage}}" hint-placeholder-val="{{true}}">
+                            <div style="height:1px;background:#f0eeeb;margin:5px 6px;"></div>
+                            <button onClick="{{card.onMenuDelete}}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:transparent;border-radius:6px;padding:8px 9px;font-size:13px;color:#c0272d;" style-hover="background:#fde8e8;"><i class="ph ph-trash" style="font-size:16px;color:#c0272d;"></i>Delete</button>
+                          </sc-if>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </div>
+                  <sc-if value="{{card.isDeleting}}" hint-placeholder-val="{{false}}">
+                    <div style="grid-column:1 / -1;margin-top:8px;background:#fffafa;border:1px solid #fde8e8;border-radius:8px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;animation:mp-expand 180ms ease-out;">
+                      <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
+                        <span style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:#28241e;">Delete “{{card.name}}”? <span style="font-family:'Inter',sans-serif;font-weight:400;color:#787068;">This cannot be undone.</span></span>
+                        <sc-if value="{{card.showActiveWarning}}" hint-placeholder-val="{{false}}"><span style="font-size:11.5px;color:#92620a;">{{card.activeWarnShort}}</span></sc-if>
+                      </div>
+                      <div style="display:flex;gap:8px;flex-shrink:0;">
+                        <button onClick="{{card.onDeleteCancel}}" style="height:30px;padding:0 12px;background:#fff;color:#3d3830;border:1px solid #e2ded9;border-radius:6px;font-size:12.5px;font-weight:500;" style-hover="background:#f8f7f5;">Cancel</button>
+                        <button onClick="{{card.onDeleteConfirm}}" style="height:30px;padding:0 12px;background:#c0272d;color:#fff;border:none;border-radius:6px;font-size:12.5px;font-weight:500;" style-hover="background:#a31f24;">Delete</button>
+                      </div>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- menu backdrop -->
+  <sc-if value="{{anyMenuOpen}}" hint-placeholder-val="{{false}}">
+    <div onClick="{{onBackdrop}}" style="position:fixed;inset:0;z-index:40;"></div>
+  </sc-if>
+
+  <!-- ================= PREVIEW MODAL ================= -->
+  <sc-if value="{{previewOpen}}" hint-placeholder-val="{{false}}">
+    <div style="position:fixed;inset:0;z-index:100;background:rgba(24,21,15,.45);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:3vh 3vw;animation:mp-fade-in 120ms ease;">
+      <div style="width:100%;max-width:1240px;height:94vh;background:#fff;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.10),0 2px 8px rgba(0,0,0,.06);display:flex;flex-direction:column;overflow:hidden;animation:mp-modal-in 200ms ease-out;">
+        <div style="height:60px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 18px 0 16px;border-bottom:1px solid #e2ded9;">
+          <button onClick="{{preview.onBack}}" style="display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 12px 0 8px;background:transparent;border:none;border-radius:6px;color:#534d46;font-size:13px;font-weight:500;" style-hover="background:#f0eeeb;color:#28241e;"><i class="ph ph-arrow-left" style="font-size:17px;"></i>Back to templates</button>
+          <span style="font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;color:#28241e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:50%;">{{preview.name}}</span>
+          <button onClick="{{preview.onClose}}" aria-label="Close" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;border-radius:8px;color:#534d46;" style-hover="background:#f0eeeb;color:#28241e;"><i class="ph ph-x" style="font-size:19px;"></i></button>
+        </div>
+
+        <div style="flex:1;display:flex;min-height:0;">
+          <!-- meta sidebar -->
+          <div class="mp-scroll" style="width:312px;flex-shrink:0;border-right:1px solid #e2ded9;overflow-y:auto;padding:22px 22px 26px;display:flex;flex-direction:column;gap:22px;">
+            <div style="display:flex;flex-direction:column;gap:7px;">
+              <span style="font-size:11px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:#a09990;">Template name</span>
+              <sc-if value="{{preview.isRenaming}}" hint-placeholder-val="{{false}}">
+                <input value="{{preview.renameValue}}" onInput="{{preview.onRenameInput}}" onKeyDown="{{preview.onRenameKey}}" onBlur="{{preview.onRenameCommit}}" autoFocus="{{true}}" style="font-family:'DM Sans',sans-serif;font-size:20px;font-weight:500;color:#18150f;border:1px solid #1a7a6e;border-radius:6px;padding:4px 8px;"/>
+              </sc-if>
+              <sc-if value="{{preview.isNotRenaming}}" hint-placeholder-val="{{true}}">
+                <button onClick="{{preview.onStartRename}}" title="Click to rename" style="text-align:left;background:transparent;border:1px solid transparent;border-radius:6px;padding:4px 8px;margin:0 -8px;font-family:'DM Sans',sans-serif;font-size:21px;font-weight:500;line-height:1.2;color:#18150f;" style-hover="background:#f8f7f5;border-color:#e2ded9;">{{preview.name}}</button>
+              </sc-if>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <span style="font-size:11px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:#a09990;">Category</span>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                <sc-for list="{{preview.catOptions}}" as="opt" hint-placeholder-count="5">
+                  <sc-if value="{{opt.active}}" hint-placeholder-val="{{false}}">
+                    <button onClick="{{opt.onClick}}" style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border-radius:9999px;font-size:12px;font-weight:500;background:{{opt.bg}};color:{{opt.text}};border:1px solid {{opt.dot}};"><span style="width:6px;height:6px;border-radius:50%;background:{{opt.dot}};"></span>{{opt.label}}</button>
+                  </sc-if>
+                  <sc-if value="{{opt.inactive}}" hint-placeholder-val="{{true}}">
+                    <button onClick="{{opt.onClick}}" style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border-radius:9999px;font-size:12px;font-weight:500;background:#fff;color:#787068;border:1px solid #e2ded9;" style-hover="background:#f8f7f5;border-color:#c9c4bd;"><span style="width:6px;height:6px;border-radius:50%;background:{{opt.dot}};"></span>{{opt.label}}</button>
+                  </sc-if>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <span style="font-size:11px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:#a09990;">Last edited</span>
+              <span style="font-size:13.5px;color:#534d46;">{{preview.editedLine}}</span>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <button onClick="{{preview.onToggleUsed}}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:transparent;border:none;padding:0;text-align:left;color:#1a7a6e;font-size:13.5px;font-weight:500;"><span style="display:inline-flex;align-items:center;gap:7px;"><i class="ph ph-megaphone" style="font-size:16px;"></i>{{preview.usedLabel}}</span><i class="ph {{preview.usedCaret}}" style="font-size:14px;"></i></button>
+              <sc-if value="{{preview.usedExpanded}}" hint-placeholder-val="{{false}}">
+                <div style="display:flex;flex-direction:column;gap:1px;border:1px solid #e2ded9;border-radius:8px;overflow:hidden;animation:mp-expand 160ms ease-out;">
+                  <sc-for list="{{preview.campaigns}}" as="c" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:9px;padding:9px 11px;font-size:13px;color:#534d46;border-bottom:1px solid #f0eeeb;background:#fff;"><i class="ph ph-paper-plane-tilt" style="font-size:14px;color:#a09990;"></i>{{c.name}}</div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{preview.noCampaigns}}" hint-placeholder-val="{{false}}">
+                <span style="font-size:12.5px;color:#a09990;font-style:italic;">Not used in any campaigns yet.</span>
+              </sc-if>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:9px;margin-top:2px;">
+              <button onClick="{{preview.onEdit}}" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;height:38px;background:#1a7a6e;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:#0f5247;"><i class="ph ph-pencil-simple" style="font-size:16px;"></i>Edit template</button>
+              <div style="display:flex;gap:9px;">
+                <button onClick="{{preview.onDuplicate}}" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;height:36px;background:#fff;color:#3d3830;border:1px solid #e2ded9;border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:#f8f7f5;border-color:#c9c4bd;"><i class="ph ph-copy" style="font-size:15px;color:#787068;"></i>Duplicate</button>
+                <button onClick="{{preview.onUse}}" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;height:36px;background:#fff;color:#3d3830;border:1px solid #e2ded9;border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:#f8f7f5;border-color:#c9c4bd;"><i class="ph ph-paper-plane-tilt" style="font-size:15px;color:#787068;"></i>Use</button>
+              </div>
+            </div>
+
+            <div style="margin-top:auto;border-top:1px solid #f0eeeb;padding-top:14px;">
+              <button onClick="{{preview.onToggleDanger}}" style="display:flex;align-items:center;justify-content:space-between;width:100%;gap:8px;background:transparent;border:none;padding:0;text-align:left;color:#787068;font-size:12px;font-weight:500;letter-spacing:.3px;text-transform:uppercase;"><span>Danger zone</span><i class="ph {{preview.dangerCaret}}" style="font-size:13px;"></i></button>
+              <sc-if value="{{preview.dangerExpanded}}" hint-placeholder-val="{{false}}">
+                <div style="margin-top:11px;animation:mp-expand 160ms ease-out;">
+                  <sc-if value="{{preview.isNotDeleting}}" hint-placeholder-val="{{true}}">
+                    <button onClick="{{preview.onDeleteStart}}" style="display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 13px;background:#fff;color:#c0272d;border:1px solid #fde8e8;border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:#fde8e8;border-color:#c0272d;"><i class="ph ph-trash" style="font-size:15px;"></i>Delete template</button>
+                  </sc-if>
+                  <sc-if value="{{preview.isDeleting}}" hint-placeholder-val="{{false}}">
+                    <div style="background:#fffafa;border:1px solid #fde8e8;border-radius:8px;padding:11px 12px;display:flex;flex-direction:column;gap:8px;">
+                      <span style="font-size:12.5px;color:#534d46;line-height:1.5;">Delete this template permanently? This cannot be undone.</span>
+                      <sc-if value="{{preview.showActiveWarning}}" hint-placeholder-val="{{false}}"><span style="font-size:11.5px;color:#92620a;background:#fef3d0;border-radius:6px;padding:7px 9px;line-height:1.5;">{{preview.activeWarnText}}</span></sc-if>
+                      <div style="display:flex;justify-content:flex-end;gap:8px;">
+                        <button onClick="{{preview.onDeleteCancel}}" style="height:30px;padding:0 12px;background:#fff;color:#3d3830;border:1px solid #e2ded9;border-radius:6px;font-size:12.5px;font-weight:500;" style-hover="background:#f8f7f5;">Cancel</button>
+                        <button onClick="{{preview.onDeleteConfirm}}" style="height:30px;padding:0 12px;background:#c0272d;color:#fff;border:none;border-radius:6px;font-size:12.5px;font-weight:500;" style-hover="background:#a31f24;">Delete template</button>
+                      </div>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+
+          <!-- email render -->
+          <div class="mp-scroll" style="flex:1;min-width:0;background:#f0eeeb;overflow-y:auto;padding:28px;">
+            <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2ded9;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05);">
+              <div style="padding:16px 20px;border-bottom:1px solid #f0eeeb;display:flex;flex-direction:column;gap:7px;">
+                <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:11px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:#a09990;width:54px;flex-shrink:0;">From</span><span style="font-size:13px;color:#3d3830;">{{preview.fromName}}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#787068;">{{preview.fromEmail}}</span></div>
+                <div style="display:flex;align-items:flex-start;gap:8px;"><span style="font-size:11px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:#a09990;width:54px;flex-shrink:0;padding-top:1px;">Subject</span><span style="font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;color:#18150f;">{{preview.subject}}</span></div>
+                <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:11px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:#a09990;width:54px;flex-shrink:0;">Date</span><span style="font-size:13px;color:#787068;">{{preview.dateLabel}}</span></div>
+              </div>
+              <div style="position:relative;min-height:560px;background:{{preview.tintBg}};">
+                <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(135deg,rgba(40,36,30,.05) 0,rgba(40,36,30,.05) 1px,transparent 1px,transparent 12px);"></div>
+                <div style="position:absolute;top:0;left:0;right:0;height:84px;background:{{preview.tintLine}};opacity:.16;"></div>
+                <div style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:560px;padding:40px;">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:14px;color:{{preview.catText}};background:#fff;border:1px solid #e2ded9;border-radius:8px;padding:8px 16px;">{{preview.layoutLabel}}</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#a09990;">rendered email · {{preview.dim}}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ================= CREATE CHOOSER MODAL ================= -->
+  <sc-if value="{{chooserOpen}}" hint-placeholder-val="{{false}}">
+    <div onClick="{{onCloseChooser}}" style="position:fixed;inset:0;z-index:100;background:rgba(24,21,15,.45);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:5vh 24px;animation:mp-fade-in 120ms ease;">
+      <div onClick="{{stop}}" style="width:100%;max-width:820px;max-height:90vh;overflow-y:auto;background:#fff;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.10),0 2px 8px rgba(0,0,0,.06);animation:mp-modal-in 200ms ease-out;" class="mp-scroll">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid #f0eeeb;">
+          <h2 style="margin:0;font-family:'DM Sans',sans-serif;font-size:18px;font-weight:500;color:#28241e;">Create a template</h2>
+          <button onClick="{{onCloseChooser}}" aria-label="Close" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;border-radius:8px;color:#534d46;" style-hover="background:#f0eeeb;color:#28241e;"><i class="ph ph-x" style="font-size:18px;"></i></button>
+        </div>
+        <div style="padding:24px;">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
+            <div style="display:flex;flex-direction:column;gap:12px;border:1px solid #e2ded9;border-radius:12px;padding:20px;transition:border-color 120ms ease,box-shadow 120ms ease;" style-hover="border-color:#94d5c8;box-shadow:0 1px 3px rgba(0,0,0,.07);">
+              <div style="width:42px;height:42px;border-radius:10px;background:#edf7f5;display:flex;align-items:center;justify-content:center;"><i class="ph ph-file-dashed" style="font-size:22px;color:#1a7a6e;"></i></div>
+              <div style="font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;color:#28241e;">Start blank</div>
+              <p style="margin:0;font-size:13px;line-height:1.55;color:#787068;flex:1;">Open Unlayer with an empty canvas and build from scratch.</p>
+              <button onClick="{{onStartBlank}}" style="height:36px;background:#1a7a6e;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:#0f5247;">Start blank</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px;border:1px solid #e2ded9;border-radius:12px;padding:20px;transition:border-color 120ms ease,box-shadow 120ms ease;" style-hover="border-color:#94d5c8;box-shadow:0 1px 3px rgba(0,0,0,.07);">
+              <div style="width:42px;height:42px;border-radius:10px;background:#edf7f5;display:flex;align-items:center;justify-content:center;"><i class="ph ph-layout" style="font-size:22px;color:#1a7a6e;"></i></div>
+              <div style="font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;color:#28241e;">Start from a layout</div>
+              <p style="margin:0;font-size:13px;line-height:1.55;color:#787068;flex:1;">Pick a pre-built structural skeleton to start from.</p>
+              <button onClick="{{onToggleBrowse}}" style="height:36px;background:#fff;color:#3d3830;border:1px solid #e2ded9;border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:#f8f7f5;border-color:#c9c4bd;">{{browseLabel}}</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px;border:1px solid #e2ded9;border-radius:12px;padding:20px;transition:border-color 120ms ease,box-shadow 120ms ease;" style-hover="border-color:#94d5c8;box-shadow:0 1px 3px rgba(0,0,0,.07);">
+              <div style="width:42px;height:42px;border-radius:10px;background:#edf7f5;display:flex;align-items:center;justify-content:center;"><i class="ph ph-code" style="font-size:22px;color:#1a7a6e;"></i></div>
+              <div style="font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;color:#28241e;">Import HTML</div>
+              <p style="margin:0;font-size:13px;line-height:1.55;color:#787068;flex:1;">Paste or upload existing HTML. Edit in Unlayer after import.</p>
+              <button onClick="{{onImportFromChooser}}" style="height:36px;background:#fff;color:#3d3830;border:1px solid #e2ded9;border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:#f8f7f5;border-color:#c9c4bd;">Import HTML</button>
+            </div>
+          </div>
+
+          <sc-if value="{{browseLayouts}}" hint-placeholder-val="{{false}}">
+            <div style="margin-top:24px;border-top:1px solid #f0eeeb;padding-top:22px;animation:mp-expand 180ms ease-out;">
+              <div style="font-size:11px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:#a09990;margin-bottom:14px;">Choose a layout</div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;">
+                <sc-for list="{{layoutOptions}}" as="lo" hint-placeholder-count="8">
+                  <button onClick="{{lo.onClick}}" style="display:flex;flex-direction:column;gap:9px;padding:0;background:transparent;border:none;text-align:left;">
+                    <div style="height:118px;border:1px solid #e2ded9;border-radius:8px;background:#f8f7f5;padding:10px;display:flex;flex-direction:column;gap:5px;transition:border-color 120ms ease,box-shadow 120ms ease;" style-hover="border-color:#1a7a6e;box-shadow:0 0 0 3px #edf7f5;">
+                      <div style="height:9px;border-radius:2px;background:#d8d3cc;width:{{lo.headerW}};"></div>
+                      <sc-if value="{{lo.hero}}" hint-placeholder-val="{{false}}"><div style="flex:1;border-radius:4px;background:repeating-linear-gradient(135deg,#e6e2dc 0,#e6e2dc 5px,#f0eeeb 5px,#f0eeeb 10px);min-height:0;"></div></sc-if>
+                      <sc-if value="{{lo.twoCol}}" hint-placeholder-val="{{false}}">
+                        <div style="flex:1;display:flex;gap:5px;min-height:0;">
+                          <div style="flex:1;border-radius:3px;background:#eceae6;"></div>
+                          <div style="flex:1;border-radius:3px;background:#eceae6;"></div>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{lo.oneCol}}" hint-placeholder-val="{{true}}">
+                        <div style="flex:1;display:flex;flex-direction:column;gap:4px;min-height:0;justify-content:center;">
+                          <div style="height:5px;border-radius:2px;background:#eceae6;"></div>
+                          <div style="height:5px;border-radius:2px;background:#eceae6;width:92%;"></div>
+                          <div style="height:5px;border-radius:2px;background:#eceae6;width:78%;"></div>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{lo.footer}}" hint-placeholder-val="{{false}}"><div style="height:7px;border-radius:2px;background:#ddd8d1;"></div></sc-if>
+                    </div>
+                    <span style="font-size:12.5px;color:#534d46;font-weight:500;">{{lo.name}}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ================= IMPORT MODAL ================= -->
+  <sc-if value="{{importOpen}}" hint-placeholder-val="{{false}}">
+    <div onClick="{{onCloseImport}}" style="position:fixed;inset:0;z-index:110;background:rgba(24,21,15,.45);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:5vh 24px;animation:mp-fade-in 120ms ease;">
+      <div onClick="{{stop}}" style="width:100%;max-width:640px;max-height:90vh;overflow-y:auto;background:#fff;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.10),0 2px 8px rgba(0,0,0,.06);animation:mp-modal-in 200ms ease-out;" class="mp-scroll">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid #f0eeeb;">
+          <h2 style="margin:0;font-family:'DM Sans',sans-serif;font-size:18px;font-weight:500;color:#28241e;">Import HTML</h2>
+          <button onClick="{{onCloseImport}}" aria-label="Close" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;border-radius:8px;color:#534d46;" style-hover="background:#f0eeeb;color:#28241e;"><i class="ph ph-x" style="font-size:18px;"></i></button>
+        </div>
+        <div style="padding:24px;display:flex;flex-direction:column;gap:16px;">
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <label style="font-size:13px;font-weight:500;color:#3d3830;">Paste HTML</label>
+            <textarea placeholder="&lt;!DOCTYPE html&gt; …" style="width:100%;min-height:120px;resize:vertical;padding:11px 12px;background:#fff;border:1px solid #e2ded9;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.55;color:#28241e;"></textarea>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;color:#a09990;font-size:12px;"><div style="flex:1;height:1px;background:#e2ded9;"></div>OR<div style="flex:1;height:1px;background:#e2ded9;"></div></div>
+          <div style="border:1.5px dashed #c9c4bd;border-radius:10px;padding:28px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;background:#faf9f7;transition:border-color 120ms ease,background-color 120ms ease;" style-hover="border-color:#1a7a6e;background:#edf7f5;">
+            <i class="ph ph-upload-simple" style="font-size:26px;color:#787068;"></i>
+            <span style="font-size:13px;color:#534d46;">Drag &amp; drop an <span style="font-family:'JetBrains Mono',monospace;font-size:12px;">.html</span> file here</span>
+            <span style="font-size:12px;color:#a09990;">or click to browse</span>
+          </div>
+          <button onClick="{{onToggleParse}}" style="display:flex;align-items:center;gap:10px;background:transparent;border:none;padding:0;text-align:left;cursor:pointer;">
+            <span style="width:18px;height:18px;border-radius:4px;border:1px solid {{parseBorder}};background:{{parseBg}};display:flex;align-items:center;justify-content:center;flex-shrink:0;"><sc-if value="{{importParseLinks}}" hint-placeholder-val="{{true}}"><i class="ph ph-check" style="font-size:12px;color:#fff;"></i></sc-if></span>
+            <span style="font-size:13px;color:#3d3830;">Attempt to parse text links as tracked click links</span>
+          </button>
+          <div style="display:flex;gap:9px;background:#fef3d0;border-radius:8px;padding:11px 13px;"><i class="ph ph-warning" style="font-size:17px;color:#92620a;flex-shrink:0;margin-top:1px;"></i><span style="font-size:12.5px;line-height:1.55;color:#92620a;">Imported HTML will be editable in Unlayer. Complex layouts may not translate perfectly — review before sending.</span></div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:9px;padding:16px 24px;border-top:1px solid #f0eeeb;">
+          <button onClick="{{onCloseImport}}" style="height:36px;padding:0 16px;background:#fff;color:#3d3830;border:1px solid #e2ded9;border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:#f8f7f5;border-color:#c9c4bd;">Cancel</button>
+          <button onClick="{{onDoImport}}" style="height:36px;padding:0 16px;background:#1a7a6e;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:#0f5247;">Import and open in editor</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ================= PICKER USE-CONFIRM MODAL ================= -->
+  <sc-if value="{{useConfirmOpen}}" hint-placeholder-val="{{false}}">
+    <div onClick="{{onUseCancel}}" style="position:fixed;inset:0;z-index:110;background:rgba(24,21,15,.45);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:24px;animation:mp-fade-in 120ms ease;">
+      <div onClick="{{stop}}" style="width:100%;max-width:460px;background:#fff;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.10),0 2px 8px rgba(0,0,0,.06);animation:mp-modal-in 200ms ease-out;overflow:hidden;">
+        <div style="padding:24px;display:flex;flex-direction:column;gap:12px;">
+          <div style="font-family:'DM Sans',sans-serif;font-size:17px;font-weight:500;color:#28241e;">Replace current design with this template?</div>
+          <p style="margin:0;font-size:13px;line-height:1.6;color:#787068;">“{{useConfirmName}}” will be loaded into the campaign builder. Your current design will be replaced.</p>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:9px;padding:14px 24px;border-top:1px solid #f0eeeb;">
+          <button onClick="{{onUseCancel}}" style="height:36px;padding:0 16px;background:#fff;color:#3d3830;border:1px solid #e2ded9;border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:#f8f7f5;border-color:#c9c4bd;">Cancel</button>
+          <button onClick="{{onUseConfirm}}" style="height:36px;padding:0 16px;background:#1a7a6e;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:500;" style-hover="background:#0f5247;">Replace design</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ================= TOASTS ================= -->
+  <div style="position:fixed;top:20px;right:20px;z-index:200;display:flex;flex-direction:column;gap:10px;width:360px;max-width:calc(100vw - 40px);pointer-events:none;">
+    <sc-for list="{{toasts}}" as="t" hint-placeholder-count="0">
+      <div style="pointer-events:auto;background:#fff;border-radius:10px;border-left:3px solid {{t.color}};box-shadow:0 8px 24px rgba(0,0,0,.10),0 2px 8px rgba(0,0,0,.06);padding:12px 14px;display:flex;align-items:flex-start;gap:11px;animation:mp-toast-in 200ms ease-out;">
+        <i class="ph {{t.icon}}" style="font-size:19px;color:{{t.color}};flex-shrink:0;margin-top:1px;"></i>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">
+          <span style="font-size:13px;font-weight:500;color:#28241e;">{{t.title}}</span>
+          <sc-if value="{{t.hasDesc}}" hint-placeholder-val="{{false}}"><span style="font-size:12.5px;color:#787068;line-height:1.45;">{{t.desc}}</span></sc-if>
+        </div>
+        <button onClick="{{t.onDismiss}}" aria-label="Dismiss" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;border-radius:5px;color:#a09990;flex-shrink:0;" style-hover="background:#f0eeeb;color:#534d46;"><i class="ph ph-x" style="font-size:13px;"></i></button>
+      </div>
+    </sc-for>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Comfortable&quot;,&quot;Compact&quot;],&quot;default&quot;:&quot;Comfortable&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;previewStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Striped + label&quot;,&quot;Structural skeleton&quot;],&quot;default&quot;:&quot;Structural skeleton&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Cards&quot;},&quot;context&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Library&quot;,&quot;Choose a template&quot;],&quot;default&quot;:&quot;Library&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Mode&quot;}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.searchRef = React.createRef();
+    this._idSeq = 100;
+    this._toastSeq = 0;
+    this._campaignPool = ['March Newsletter','Spring Launch 2025','Weekly Digest — Wk 12','Onboarding Drip','Win-back Series','Product Update Q1','Holiday Preview','Feature Spotlight','Re-activation Push'];
+    this.state = {
+      loading:true, query:'', category:'All', sort:'Last edited', view:'grid',
+      sortMenuOpen:false, openMenuId:null,
+      renamingId:null, renameDraft:'',
+      confirmDeleteId:null, hoveredId:null,
+      previewId:null, previewUsedExpanded:false, previewDangerExpanded:false,
+      chooserOpen:false, browseLayouts:false,
+      importOpen:false, importParseLinks:true,
+      useConfirmId:null,
+      toasts:[],
+      templates:[
+        {id:'t1', name:'Monthly Newsletter — Classic', category:'Newsletter', edited:'2 days ago', editedDays:2, used:8, layout:'newsletter · 1-col', dim:'600 × 820', editor:'Lena Ortega', subject:'Your monthly digest — what’s new in March'},
+        {id:'t2', name:'Product Launch Announcement', category:'Announcement', edited:'1 week ago', editedDays:7, used:3, layout:'announce · hero+cta', dim:'600 × 760', editor:'Marcus Reed', subject:'Introducing our biggest update yet'},
+        {id:'t3', name:'Summer Promotion 2025', category:'Promotion', edited:'3 weeks ago', editedDays:21, used:5, layout:'promo · hero+grid', dim:'600 × 900', editor:'Priya Shah', subject:'Summer sale — up to 40% off, this week only'},
+        {id:'t4', name:'Transactional Confirm', category:'Transactional', edited:'1 month ago', editedDays:30, used:12, automated:true, layout:'txn · receipt', dim:'600 × 640', editor:'System', subject:'Your order is confirmed'},
+        {id:'t5', name:'Welcome Series — Plain text', category:'Newsletter', edited:'2 months ago', editedDays:60, used:1, layout:'plain-text', dim:'600 × 560', editor:'Lena Ortega', subject:'Welcome aboard — let’s get you started'},
+        {id:'t6', name:'Black Friday Banner', category:'Seasonal', edited:'4 months ago', editedDays:120, used:2, layout:'promo · full-banner', dim:'600 × 700', editor:'Priya Shah', subject:'Black Friday starts now'},
+        {id:'t7', name:'Minimal 1-column', category:'Newsletter', edited:'6 months ago', editedDays:180, used:0, layout:'minimal · 1-col', dim:'600 × 600', editor:'Devon Clarke', subject:'A simple note from the team'},
+        {id:'t8', name:'Cart Abandonment Reminder', category:'Transactional', edited:'3 days ago', editedDays:3, used:6, layout:'txn · reminder', dim:'600 × 680', editor:'System', subject:'You left something behind'},
+        {id:'t9', name:'Webinar Invitation', category:'Announcement', edited:'2 weeks ago', editedDays:14, used:4, layout:'announce · event', dim:'600 × 740', editor:'Marcus Reed', subject:'You’re invited: live product webinar'},
+        {id:'t10', name:'Re-engagement Win-back', category:'Promotion', edited:'5 weeks ago', editedDays:35, used:3, layout:'promo · 2-col', dim:'600 × 720', editor:'Priya Shah', subject:'We miss you — here’s 20% off'},
+        {id:'t11', name:'Feature Update Digest', category:'Newsletter', edited:'4 days ago', editedDays:4, used:7, layout:'newsletter · digest', dim:'600 × 880', editor:'Lena Ortega', subject:'New this month: 6 features you asked for'},
+        {id:'t12', name:'Order Shipped Notification', category:'Transactional', edited:'2 weeks ago', editedDays:14, used:9, automated:true, layout:'txn · status', dim:'600 × 620', editor:'System', subject:'Good news — your order has shipped'},
+        {id:'t13', name:'Holiday Gift Guide', category:'Seasonal', edited:'5 months ago', editedDays:150, used:1, layout:'seasonal · grid', dim:'600 × 920', editor:'Devon Clarke', subject:'The 2025 holiday gift guide'},
+        {id:'t14', name:'Spring Sale Teaser', category:'Promotion', edited:'2 months ago', editedDays:60, used:2, layout:'promo · teaser', dim:'600 × 660', editor:'Priya Shah', subject:'Something fresh is coming this spring'}
+      ]
+    };
+  }
+
+  componentDidMount(){
+    this._loadTimer = setTimeout(()=>this.setState({loading:false}), 800);
+    this._onKey = (e)=>{
+      if(e.key === '/' && !this._isTyping(e)){ e.preventDefault(); if(this.searchRef.current) this.searchRef.current.focus(); }
+      else if(e.key === 'Escape'){ this._escape(); }
+    };
+    window.addEventListener('keydown', this._onKey);
+  }
+  componentWillUnmount(){ clearTimeout(this._loadTimer); window.removeEventListener('keydown', this._onKey); }
+
+  _isTyping(e){ const t=e.target; return t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable); }
+  _escape(){
+    const s=this.state;
+    if(s.importOpen) return this.setState({importOpen:false});
+    if(s.useConfirmId) return this.setState({useConfirmId:null});
+    if(s.chooserOpen) return this.setState({chooserOpen:false, browseLayouts:false});
+    if(s.previewId) return this.setState({previewId:null});
+    if(s.openMenuId||s.sortMenuOpen) return this.setState({openMenuId:null, sortMenuOpen:false});
+    if(s.confirmDeleteId) return this.setState({confirmDeleteId:null});
+    if(s.renamingId) return this.setState({renamingId:null});
+  }
+
+  _isPicker(){ return this.props.context === 'Choose a template'; }
+
+  catColors(c){
+    const m={
+      Newsletter:{bg:'#edf7f5',text:'#0f5247',dot:'#2fa898'},
+      Promotion:{bg:'#fef3d0',text:'#92620a',dot:'#d99a1a'},
+      Announcement:{bg:'#fdf0e8',text:'#984a14',dot:'#c2762e'},
+      Transactional:{bg:'#e3f0fd',text:'#1a5fa8',dot:'#3b82d4'},
+      Seasonal:{bg:'#f0ecf9',text:'#5b3a9e',dot:'#8a6bc7'}
+    };
+    return m[c]||{bg:'#f0eeeb',text:'#534d46',dot:'#a09990'};
+  }
+
+  addToast(variant, title, desc){
+    const id = ++this._toastSeq;
+    this.setState(s=>({toasts:[...s.toasts, {id, variant, title, desc}].slice(-3)}));
+    setTimeout(()=>this.dismissToast(id), 4000);
+  }
+  dismissToast(id){ this.setState(s=>({toasts:s.toasts.filter(t=>t.id!==id)})); }
+
+  _visible(){
+    const {templates, query, category, sort} = this.state;
+    const q = query.trim().toLowerCase();
+    let list = templates.filter(t=>{
+      const okCat = category==='All' || t.category===category;
+      const okQ = !q || t.name.toLowerCase().includes(q);
+      return okCat && okQ;
+    });
+    if(sort==='Name A–Z') list = list.slice().sort((a,b)=>a.name.localeCompare(b.name));
+    else if(sort==='Most used') list = list.slice().sort((a,b)=>b.used-a.used);
+    else list = list.slice().sort((a,b)=>a.editedDays-b.editedDays);
+    return list;
+  }
+
+  setView(v){ this.setState({view:v, openMenuId:null, sortMenuOpen:false}); }
+  setCategory(c){ this.setState({category:c}); }
+  toggleSort(){ this.setState(s=>({sortMenuOpen:!s.sortMenuOpen, openMenuId:null})); }
+  chooseSort(v){ this.setState({sort:v, sortMenuOpen:false}); }
+  closeMenus(){ this.setState({openMenuId:null, sortMenuOpen:false}); }
+  toggleMenu(id){ this.setState(s=>({openMenuId: s.openMenuId===id?null:id, sortMenuOpen:false})); }
+  clearSearch(){ this.setState({query:'', category:'All'}, ()=>{ if(this.searchRef.current) this.searchRef.current.focus(); }); }
+  hover(id){ this.setState({hoveredId:id}); }
+  leave(id){ this.setState(s=> s.hoveredId===id ? {hoveredId:null} : null); }
+
+  startRename(id){ const t=this.state.templates.find(x=>x.id===id); this.setState({renamingId:id, renameDraft:t?t.name:'', openMenuId:null}); }
+  onRenameInput(e){ this.setState({renameDraft:e.target.value}); }
+  onRenameKey(e){ if(e.key==='Enter'){ e.preventDefault(); this.commitRename(); } else if(e.key==='Escape'){ e.preventDefault(); this.setState({renamingId:null}); } }
+  commitRename(){
+    const {renamingId, renameDraft} = this.state;
+    if(renamingId && renameDraft.trim()){
+      this.setState(s=>({templates:s.templates.map(t=>t.id===renamingId?{...t, name:renameDraft.trim()}:t), renamingId:null}), ()=>this.addToast('success','Template renamed'));
+    } else this.setState({renamingId:null});
+  }
+
+  duplicate(id){
+    const t=this.state.templates.find(x=>x.id===id); if(!t) return;
+    const copy={...t, id:'t'+(++this._idSeq), name:t.name+' (copy)', used:0, automated:false, editedDays:0, edited:'just now', editor:'Avery Quinn'};
+    this.setState(s=>{
+      const i=s.templates.findIndex(x=>x.id===id);
+      const next=s.templates.slice(); next.splice(i+1,0,copy);
+      return {templates:next, openMenuId:null};
+    }, ()=>this.addToast('success','Template duplicated','“'+t.name+'” copied'));
+  }
+  editTemplate(id){ const t=this.state.templates.find(x=>x.id===id); this.setState({openMenuId:null}); this.addToast('info','Opening editor', t?('“'+t.name+'” in Unlayer'):null); }
+  useInCampaign(id){ const t=this.state.templates.find(x=>x.id===id); this.setState({openMenuId:null, previewId:null}); this.addToast('info','Added to new campaign', t?('“'+t.name+'” loaded into the builder'):null); }
+  startDelete(id){ this.setState({confirmDeleteId:id, openMenuId:null}); }
+  cancelDelete(){ this.setState({confirmDeleteId:null}); }
+  confirmDelete(id){
+    const t=this.state.templates.find(x=>x.id===id);
+    this.setState(s=>({templates:s.templates.filter(x=>x.id!==id), confirmDeleteId:null, previewId: s.previewId===id?null:s.previewId, previewDangerExpanded:false}), ()=>this.addToast('success','Template deleted', t?('“'+t.name+'” removed'):null));
+  }
+
+  openPreview(id){ this.setState({previewId:id, previewUsedExpanded:false, previewDangerExpanded:false, openMenuId:null, hoveredId:null, confirmDeleteId:null}); }
+  closePreview(){ this.setState({previewId:null}); }
+  changeCategory(id,c){ this.setState(s=>({templates:s.templates.map(t=>t.id===id?{...t, category:c}:t)}), ()=>this.addToast('success','Category updated')); }
+
+  openChooser(){ this.setState({chooserOpen:true, browseLayouts:false}); }
+  closeChooser(){ this.setState({chooserOpen:false, browseLayouts:false}); }
+  toggleBrowse(){ this.setState(s=>({browseLayouts:!s.browseLayouts})); }
+  startBlank(){ this.setState({chooserOpen:false}); this.addToast('info','New blank template','Opening Unlayer with an empty canvas'); }
+  pickLayout(name){ this.setState({chooserOpen:false, browseLayouts:false}); this.addToast('info','Starting from layout','“'+name+'” opening in Unlayer'); }
+  openImport(){ this.setState({importOpen:true, chooserOpen:false}); }
+  closeImport(){ this.setState({importOpen:false}); }
+  doImport(){ this.setState({importOpen:false}); this.addToast('success','HTML imported','Opening in Unlayer for review'); }
+  toggleParse(){ this.setState(s=>({importParseLinks:!s.importParseLinks})); }
+
+  askUse(id){ this.setState({useConfirmId:id, hoveredId:null}); }
+  cancelUse(){ this.setState({useConfirmId:null}); }
+  confirmUse(){ const id=this.state.useConfirmId; this.setState({useConfirmId:null}); this.useInCampaign(id); }
+
+  renderVals(){
+    const S=this.state;
+    const picker = this._isPicker();
+    const density = this.props.density === 'Compact' ? 'compact' : 'comfortable';
+    const previewStyle = this.props.previewStyle === 'Structural skeleton' ? 'skeleton' : 'striped';
+    const list = this._visible();
+    const total = S.templates.length;
+    const filtering = S.query.trim() !== '' || S.category !== 'All';
+
+    const cats = ['All','Newsletter','Promotion','Announcement','Transactional','Seasonal'];
+    const pills = cats.map(c=>({ label:c, active:S.category===c, inactive:S.category!==c, onClick:()=>this.setCategory(c) }));
+
+    const sortOptions = ['Last edited','Name A–Z','Most used'].map(v=>({ label:v, active:S.sort===v, onClick:()=>this.chooseSort(v) }));
+
+    const segActive='background:#fff;color:#1a7a6e;box-shadow:0 1px 2px rgba(0,0,0,.10);';
+    const segIdle='background:transparent;color:#787068;';
+
+    const cards = list.map(t=>{
+      const cc=this.catColors(t.category);
+      const hovered=S.hoveredId===t.id;
+      const usedTxt = t.automated ? 'Automated' : ('Used in '+t.used+' campaign'+(t.used===1?'':'s'));
+      return {
+        id:t.id, name:t.name, category:t.category,
+        catBg:cc.bg, catText:cc.text, catDot:cc.dot, tintBg:cc.bg, tintLine:cc.dot,
+        layoutLabel:t.layout, dim:t.dim,
+        edited:'Edited '+t.edited,
+        usedLabel:usedTxt,
+        usedShort: t.automated ? 'Automated' : String(t.used),
+        usedIcon: t.automated ? 'ph-lightning' : 'ph-megaphone',
+        striped: previewStyle==='striped', skeleton: previewStyle==='skeleton',
+        basis: density==='compact' ? '208px' : '244px',
+        borderColor: hovered ? '#1a7a6e' : '#e2ded9',
+        boxShadow: hovered ? '0 4px 14px rgba(0,0,0,.09),0 1px 3px rgba(0,0,0,.06)' : '0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05)',
+        overlayOpacity: hovered ? '1' : '0',
+        overlayPe: hovered ? 'auto' : 'none',
+        rowBg: hovered ? '#f8f7f5' : '#fff',
+        rowActionsOpacity: (hovered || S.openMenuId===t.id) ? '1' : '0',
+        isMenuOpen:S.openMenuId===t.id,
+        isRenaming:S.renamingId===t.id, isNotRenaming:S.renamingId!==t.id,
+        isDeleting:S.confirmDeleteId===t.id, isNotDeleting:S.confirmDeleteId!==t.id,
+        showActiveWarning: t.used>0,
+        activeWarnText: 'This template is used in '+t.used+' campaign'+(t.used===1?'':'s')+'. Those campaigns won’t be affected, but you won’t be able to re-open this template.',
+        activeWarnShort: 'Used in '+t.used+' active campaign'+(t.used===1?'':'s')+' — those won’t be affected.',
+        showManage: !picker,
+        hoverPrimaryLabel: picker ? 'Use this' : 'Edit',
+        renameValue:S.renameDraft,
+        onEnter:()=>this.hover(t.id), onLeave:()=>this.leave(t.id),
+        onMenu:(e)=>{ if(e&&e.stopPropagation)e.stopPropagation(); this.toggleMenu(t.id); },
+        onPreview:(e)=>{ if(e&&e.stopPropagation)e.stopPropagation(); this.openPreview(t.id); },
+        onPrimaryAction:(e)=>{ if(e&&e.stopPropagation)e.stopPropagation(); picker ? this.askUse(t.id) : this.editTemplate(t.id); },
+        onMenuEdit:()=>this.editTemplate(t.id),
+        onMenuDuplicate:()=>this.duplicate(t.id),
+        onMenuRename:()=>this.startRename(t.id),
+        onMenuUse:()=>this.useInCampaign(t.id),
+        onMenuDelete:()=>this.startDelete(t.id),
+        onRenameInput:(e)=>this.onRenameInput(e),
+        onRenameKey:(e)=>this.onRenameKey(e),
+        onRenameCommit:()=>this.commitRename(),
+        onDeleteCancel:()=>this.cancelDelete(),
+        onDeleteConfirm:()=>this.confirmDelete(t.id)
+      };
+    });
+
+    // layout skeleton options
+    const lDef=[
+      {name:'1-column', oneCol:true, footer:true},
+      {name:'2-column', twoCol:true, footer:true},
+      {name:'Header + body + footer', oneCol:true, footer:true, headerW:'80%'},
+      {name:'Hero + grid', hero:true, twoCol:true},
+      {name:'Sidebar + content', twoCol:true},
+      {name:'Newsletter digest', oneCol:true, footer:true},
+      {name:'Promo banner', hero:true, oneCol:true},
+      {name:'Plain text', oneCol:true}
+    ];
+    const layoutOptions=lDef.map(l=>({
+      name:l.name, hero:!!l.hero, twoCol:!!l.twoCol, oneCol:!!l.oneCol, footer:!!l.footer,
+      headerW: l.headerW || '55%',
+      onClick:()=>this.pickLayout(l.name)
+    }));
+
+    // preview vm
+    let preview=null;
+    if(S.previewId){
+      const t=S.templates.find(x=>x.id===S.previewId);
+      if(t){
+        const cc=this.catColors(t.category);
+        const campaigns=this._campaignPool.slice(0, Math.min(t.used,6)).map(n=>({name:n}));
+        preview={
+          id:t.id, name:t.name,
+          isRenaming:S.renamingId===t.id, isNotRenaming:S.renamingId!==t.id, renameValue:S.renameDraft,
+          catText:cc.text, tintBg:cc.bg, tintLine:cc.dot,
+          layoutLabel:t.layout, dim:t.dim,
+          editedLine:'Edited '+t.edited+' · by '+t.editor,
+          usedLabel:'Used in '+t.used+' campaign'+(t.used===1?'':'s'),
+          usedCaret:S.previewUsedExpanded?'ph-caret-up':'ph-caret-down',
+          usedExpanded:S.previewUsedExpanded && t.used>0,
+          noCampaigns:S.previewUsedExpanded && t.used===0,
+          campaigns,
+          dangerCaret:S.previewDangerExpanded?'ph-caret-up':'ph-caret-down',
+          dangerExpanded:S.previewDangerExpanded,
+          isDeleting:S.confirmDeleteId===t.id, isNotDeleting:S.confirmDeleteId!==t.id,
+          showActiveWarning:t.used>0,
+          activeWarnText:'This template is used in '+t.used+' campaign'+(t.used===1?'':'s')+'. Those campaigns won’t be affected, but you won’t be able to re-open this template.',
+          fromName:'MailPrecision', fromEmail:'<team@mailprecision.io>',
+          subject:t.subject, dateLabel:t.edited.replace(/ ago$/,'')+' ago · 9:14 AM',
+          catOptions:['Newsletter','Promotion','Announcement','Transactional','Seasonal'].map(c=>{ const x=this.catColors(c); return {label:c, active:t.category===c, inactive:t.category!==c, bg:x.bg, text:x.text, dot:x.dot, onClick:()=>this.changeCategory(t.id,c)}; }),
+          onBack:()=>this.closePreview(), onClose:()=>this.closePreview(),
+          onStartRename:()=>this.startRename(t.id),
+          onRenameInput:(e)=>this.onRenameInput(e), onRenameKey:(e)=>this.onRenameKey(e), onRenameCommit:()=>this.commitRename(),
+          onToggleUsed:()=>this.setState(s=>({previewUsedExpanded:!s.previewUsedExpanded})),
+          onToggleDanger:()=>this.setState(s=>({previewDangerExpanded:!s.previewDangerExpanded, confirmDeleteId:null})),
+          onEdit:()=>this.editTemplate(t.id), onDuplicate:()=>this.duplicate(t.id), onUse:()=>this.useInCampaign(t.id),
+          onDeleteStart:()=>this.startDelete(t.id), onDeleteCancel:()=>this.cancelDelete(), onDeleteConfirm:()=>this.confirmDelete(t.id)
+        };
+      }
+    }
+
+    const toasts=S.toasts.map(t=>{
+      const map={ success:{color:'#1a7a46', icon:'ph-check-circle'}, error:{color:'#c0272d', icon:'ph-x-circle'}, warning:{color:'#92620a', icon:'ph-warning'}, info:{color:'#1a7a6e', icon:'ph-info'} };
+      const m=map[t.variant]||map.info;
+      return { id:t.id, title:t.title, desc:t.desc, hasDesc:!!t.desc, color:m.color, icon:m.icon, onDismiss:()=>this.dismissToast(t.id) };
+    });
+
+    const subtitle = filtering ? (list.length+' of '+total+' templates') : (total+' templates available');
+
+    return {
+      loading:S.loading,
+      titleText: picker ? 'Choose a template' : 'Template Library',
+      subtitle,
+      isPicker:picker, showLibraryActions:!picker,
+      query:S.query, hasQuery:S.query.trim()!=='',
+      sortLabel:S.sort, sortMenuOpen:S.sortMenuOpen, sortOptions,
+      pills,
+      gridSeg: S.view==='grid'?segActive:segIdle,
+      listSeg: S.view==='list'?segActive:segIdle,
+      minCol: density==='compact' ? '208px' : '244px',
+      gridGap: density==='compact' ? '16px' : '24px',
+      showGrid: !S.loading && list.length>0 && S.view==='grid',
+      showList: !S.loading && list.length>0 && S.view==='list',
+      isEmpty: !S.loading && list.length===0,
+      emptyTitle: S.query.trim()!=='' ? ('No templates matching “'+S.query.trim()+'”') : ('No '+S.category+' templates yet'),
+      emptySub: S.query.trim()!=='' ? 'Try a different name or clear the filter.' : 'Switch categories or create a new template to fill this space.',
+      cards, skeletons:[1,2,3,4,5,6,7,8], layoutOptions,
+      browseLayouts:S.browseLayouts, browseLabel: S.browseLayouts ? 'Hide layouts' : 'Browse',
+      anyMenuOpen: !!(S.openMenuId || S.sortMenuOpen),
+      onBackdrop:()=>this.closeMenus(),
+      onSearch:(e)=>this.setState({query:e.target.value}),
+      onClearSearch:()=>this.clearSearch(),
+      onToggleSort:()=>this.toggleSort(),
+      onGridView:()=>this.setView('grid'), onListView:()=>this.setView('list'),
+      onImport:()=>this.openImport(), onNewTemplate:()=>this.openChooser(), onStartBlankHeader:()=>this.startBlank(),
+      previewOpen:!!preview, preview: preview || {},
+      chooserOpen:S.chooserOpen, onCloseChooser:()=>this.closeChooser(), onToggleBrowse:()=>this.toggleBrowse(),
+      onStartBlank:()=>this.startBlank(), onImportFromChooser:()=>this.openImport(),
+      importOpen:S.importOpen, onCloseImport:()=>this.closeImport(), onDoImport:()=>this.doImport(),
+      importParseLinks:S.importParseLinks, onToggleParse:()=>this.toggleParse(),
+      parseBg: S.importParseLinks ? '#1a7a6e' : '#fff', parseBorder: S.importParseLinks ? '#1a7a6e' : '#c9c4bd',
+      useConfirmOpen:!!S.useConfirmId,
+      useConfirmName: (S.templates.find(x=>x.id===S.useConfirmId)||{}).name || '',
+      onUseCancel:()=>this.cancelUse(), onUseConfirm:()=>this.confirmUse(),
+      toasts,
+      stop:(e)=>{ if(e&&e.stopPropagation) e.stopPropagation(); }
+    };
+  }
+}
+</script>
+</body>
+</html>

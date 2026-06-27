@@ -6,7 +6,7 @@ A user mocked up designs in HTML/CSS/JS using an AI design tool, then exported t
 
 ## What you should do — IMPORTANT
 
-**Read `design-sistemi-olu-tur/project/Campaigns.dc.html` in full.** The user had this file open when they triggered the handoff, so it's almost certainly the primary design they want built. Read it top to bottom — don't skim. Then **follow its imports**: open every file it pulls in (shared components, CSS, scripts) so you understand how the pieces fit together before you start implementing.
+**Read `design-system-template-library-screen/project/Template Library.dc.html` in full.** The user had this file open when they triggered the handoff, so it's almost certainly the primary design they want built. Read it top to bottom — don't skim. Then **follow its imports**: open every file it pulls in (shared components, CSS, scripts) so you understand how the pieces fit together before you start implementing.
 
 **If anything is ambiguous, ask the user to confirm before you start implementing.** It's much cheaper to clarify scope up front than to build the wrong thing.
 
@@ -18,5 +18,5 @@ The design medium is **HTML/CSS/JS** — these are prototypes, not production co
 
 ## Bundle contents
 
-- `design-sistemi-olu-tur/README.md` — this file
-- `design-sistemi-olu-tur/project/` — the `Design sistemi oluştur` project files (HTML prototypes, assets, components)
+- `design-system-template-library-screen/README.md` — this file
+- `design-system-template-library-screen/project/` — the `Design system: Template library screen` project files (HTML prototypes, assets, components)
