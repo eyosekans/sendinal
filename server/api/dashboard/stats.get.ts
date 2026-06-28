@@ -1,5 +1,6 @@
 import { serverSupabaseClient } from '#supabase/server'
 import type { Database } from '~~/app/types/database.types'
+import { computeReputation, REPUTATION_WINDOW_DAYS } from '#shared/reputation'
 
 /**
  * GET /api/dashboard/stats
@@ -8,6 +9,7 @@ import type { Database } from '~~/app/types/database.types'
  *   - avgOpenRate / avgClickRate across delivered sends, with sentCampaigns count
  *   - campaign health (delivered / bounced / complained + deliverability %)
  *   - sendsOverTime: daily delivered count for the last 30 days
+ *   - reputation: 7-day bounce/complaint rate + SES-threshold flags (task 4.1)
  *
  * Metrics are computed in-app over the raw tables; Phase 4.7 caches this.
  */
@@ -23,6 +25,9 @@ export default defineEventHandler(async (event) => {
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1),
   )
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+  const reputationWindowStart = new Date(
+    now.getTime() - REPUTATION_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+  )
 
   const pctChange = (cur: number, prev: number): number | null =>
     prev === 0 ? null : Number((((cur - prev) / prev) * 100).toFixed(1))
@@ -40,6 +45,11 @@ export default defineEventHandler(async (event) => {
   let complained = 0
   let sentThisMonth = 0
   let sentLastMonth = 0
+  // Rolling reputation window (task 4.1) — bounced/complained sends keep the
+  // `sent_at` from their original send, so the window filter catches them.
+  let delivered7 = 0
+  let bounced7 = 0
+  let complained7 = 0
   const dailyDelivered = new Map<string, number>()
 
   for (const s of sends ?? []) {
@@ -55,8 +65,19 @@ export default defineEventHandler(async (event) => {
         const day = s.sent_at.slice(0, 10) // YYYY-MM-DD
         dailyDelivered.set(day, (dailyDelivered.get(day) ?? 0) + 1)
       }
+      if (t >= reputationWindowStart) {
+        if (s.status === 'sent') delivered7++
+        else if (s.status === 'bounced') bounced7++
+        else if (s.status === 'complained') complained7++
+      }
     }
   }
+
+  const reputation = computeReputation({
+    totalSent: delivered7 + bounced7 + complained7,
+    bounced: bounced7,
+    complained: complained7,
+  })
   // "Total Sent" = anything that actually left for SES (delivered + bounced + complained).
   const totalSent = delivered + bounced + complained
   const deliverability = rate(delivered, delivered + bounced + complained)
@@ -119,5 +140,6 @@ export default defineEventHandler(async (event) => {
     sentCampaigns: sentCampRes.count ?? 0,
     health: { delivered, bounced, complained, deliverability },
     sendsOverTime,
+    reputation,
   }
 })

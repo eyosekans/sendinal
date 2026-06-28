@@ -9,6 +9,9 @@ export const campaignStatusSchema = z.enum([
   'sent',
   'cancelled',
   'failed',
+  // Auto-set by the worker's reputation guard (task 4.1) when SES bounce/
+  // complaint thresholds are crossed; halts the campaign's queued sends.
+  'paused',
 ])
 export type CampaignStatus = z.infer<typeof campaignStatusSchema>
 

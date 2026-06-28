@@ -66,7 +66,6 @@ export default defineEventHandler(async (event) => {
     .update({
       status: 'scheduled',
       scheduled_at: when.toISOString(),
-      updated_at: new Date().toISOString(),
     })
     .eq('id', id)
     .in('status', ['draft', 'scheduled'])

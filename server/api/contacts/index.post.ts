@@ -53,7 +53,6 @@ export default defineEventHandler(async (event) => {
         ...fields,
         status: 'active',
         deleted_at: null,
-        updated_at: new Date().toISOString(),
       })
       .eq('id', existing.id)
       .select()

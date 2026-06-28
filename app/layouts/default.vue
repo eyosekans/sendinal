@@ -139,10 +139,7 @@ async function logout() {
           <span class="search__kbd">⌘K</span>
         </div>
         <div class="topbar__right">
-          <button type="button" class="icon-btn" title="Notifications">
-            <i class="ph ph-bell" />
-            <span class="icon-btn__dot" />
-          </button>
+          <NotificationBell />
           <button type="button" class="btn-primary" @click="newCampaign">
             <i class="ph ph-plus" /> New Campaign
           </button>
@@ -397,35 +394,6 @@ async function logout() {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-.icon-btn {
-  position: relative;
-  width: 38px;
-  height: 38px;
-  border: none;
-  background: transparent;
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--gray-600);
-}
-.icon-btn:hover {
-  background: var(--gray-100);
-}
-.icon-btn .ph {
-  font-size: 20px;
-}
-.icon-btn__dot {
-  position: absolute;
-  top: 8px;
-  right: 9px;
-  width: 7px;
-  height: 7px;
-  border-radius: var(--radius-full);
-  background: var(--danger-600);
-  border: 1.5px solid var(--gray-50);
 }
 .btn-primary {
   display: flex;

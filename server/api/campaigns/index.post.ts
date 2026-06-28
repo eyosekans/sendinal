@@ -9,7 +9,7 @@ import { createCampaignSchema } from '#shared/schemas'
  * SES sender when omitted.
  */
 export default defineEventHandler(async (event) => {
-  await requireUser(event)
+  const user = await requireUser(event)
 
   const parsed = createCampaignSchema.safeParse(await readBody(event))
   if (!parsed.success) {
@@ -37,6 +37,8 @@ export default defineEventHandler(async (event) => {
       segment_rules: body.segmentRules as Json,
       ab_variants: body.abVariants as Json,
       status: 'draft',
+      // Ownership for routing alerts to the creator (task 4.2).
+      created_by: user.id,
     })
     .select()
     .single()

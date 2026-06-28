@@ -27,6 +27,7 @@ export type CampaignStatus =
   | 'sent'
   | 'cancelled'
   | 'failed'
+  | 'paused'
 export type SendStatus = 'queued' | 'sent' | 'failed' | 'bounced' | 'complained'
 export type EmailEventType =
   | 'opened'
@@ -35,6 +36,7 @@ export type EmailEventType =
   | 'complained'
   | 'unsubscribed'
 export type TrackingTokenType = 'open' | 'click' | 'unsubscribe'
+export type NotificationSeverity = 'info' | 'warning' | 'critical'
 
 export interface Database {
   public: {
@@ -149,6 +151,7 @@ export interface Database {
           status: CampaignStatus
           scheduled_at: string | null
           sent_at: string | null
+          created_by: string | null
           created_at: string
           updated_at: string
         }
@@ -167,6 +170,7 @@ export interface Database {
           status?: CampaignStatus
           scheduled_at?: string | null
           sent_at?: string | null
+          created_by?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -185,6 +189,7 @@ export interface Database {
           status?: CampaignStatus
           scheduled_at?: string | null
           sent_at?: string | null
+          created_by?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -199,6 +204,52 @@ export interface Database {
             foreignKeyName: 'campaigns_template_id_fkey'
             columns: ['template_id']
             referencedRelation: 'templates'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          id: string
+          user_id: string
+          type: string
+          severity: NotificationSeverity
+          title: string
+          body: string
+          campaign_id: string | null
+          metadata: Json
+          read_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          type: string
+          severity?: NotificationSeverity
+          title: string
+          body: string
+          campaign_id?: string | null
+          metadata?: Json
+          read_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          type?: string
+          severity?: NotificationSeverity
+          title?: string
+          body?: string
+          campaign_id?: string | null
+          metadata?: Json
+          read_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'notifications_campaign_id_fkey'
+            columns: ['campaign_id']
+            referencedRelation: 'campaigns'
             referencedColumns: ['id']
           },
         ]

@@ -1,4 +1,5 @@
 import type { CampaignStatus } from './database.types'
+import type { Reputation } from '#shared/reputation'
 
 /** A campaign row enriched with delivery metrics (GET /api/campaigns). */
 export interface CampaignListItem {
@@ -51,6 +52,8 @@ export interface DashboardStats {
     deliverability: number | null
   }
   sendsOverTime: { date: string; count: number }[]
+  /** 7-day bounce/complaint rate + SES-threshold flags (task 4.1). */
+  reputation: Reputation
 }
 
 /** Delivery + engagement summary for a campaign (GET /api/campaigns/:id/stats). */

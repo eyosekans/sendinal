@@ -25,6 +25,8 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  // A DB trigger maintains `updated_at` (task 4.3); seeding it keeps a no-op
+  // PATCH a non-empty (valid) update.
   const update: Database['public']['Tables']['campaigns']['Update'] = {
     updated_at: new Date().toISOString(),
   }

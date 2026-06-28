@@ -21,6 +21,21 @@ export async function processEmailSend(job: Job) {
     .maybeSingle()
   if (!send || send.status === 'sent') return
 
+  // Stop sending if the campaign was paused (reputation guard, task 4.1) or
+  // cancelled while its jobs were still draining — the send stays `queued` so a
+  // re-dispatch can resume it.
+  const { data: campaign } = await supabase
+    .from('campaigns')
+    .select('status')
+    .eq('id', data.campaignId)
+    .maybeSingle()
+  if (!campaign || campaign.status !== 'sending') {
+    console.log(
+      `[email.send] skip ${data.sendId} — campaign ${campaign?.status ?? 'missing'}`,
+    )
+    return
+  }
+
   const messageId = await sendEmail({
     to: data.to,
     subject: data.subject,

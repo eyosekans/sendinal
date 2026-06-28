@@ -91,6 +91,7 @@ const STATUS_OPTIONS: {
   { key: 'sending', label: 'Sending', dot: '#1a5fa8' },
   { key: 'sent', label: 'Sent', dot: '#1a7a46' },
   { key: 'failed', label: 'Failed', dot: '#c0272d' },
+  { key: 'paused', label: 'Paused', dot: '#cc8a0a' },
   { key: 'cancelled', label: 'Cancelled', dot: '#787068' },
 ]
 const statusBtnLabel = computed(
@@ -204,6 +205,12 @@ const ROW_META: Record<
     bg: '#f0eeeb',
     fg: '#787068',
     border: '#e2ded9',
+  },
+  paused: {
+    icon: 'ph-pause-circle',
+    bg: '#fef3d0',
+    fg: '#92620a',
+    border: '#f2d68a',
   },
 }
 function fmtNum(n: number) {

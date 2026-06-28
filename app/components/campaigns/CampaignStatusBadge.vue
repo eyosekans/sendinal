@@ -62,6 +62,14 @@ const META: Record<
     dot: '#787068',
     pulse: false,
   },
+  paused: {
+    label: 'Paused',
+    bg: '#fef3d0',
+    fg: '#92620a',
+    border: '#f2d68a',
+    dot: '#cc8a0a',
+    pulse: false,
+  },
 }
 
 const meta = computed(() => META[props.status])

@@ -34,7 +34,7 @@ export function startScheduler(dispatchQueue: Queue): { stop: () => void } {
       // Atomic claim — only one tick wins this row.
       const { data: claimed, error: claimErr } = await supabase
         .from('campaigns')
-        .update({ status: 'sending', updated_at: new Date().toISOString() })
+        .update({ status: 'sending' })
         .eq('id', c.id)
         .eq('status', 'scheduled')
         .select('id')

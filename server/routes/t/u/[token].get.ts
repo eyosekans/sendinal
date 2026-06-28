@@ -40,10 +40,7 @@ export default defineEventHandler(async (event) => {
           if (contact && contact.status !== 'unsubscribed') {
             await db
               .from('contacts')
-              .update({
-                status: 'unsubscribed',
-                updated_at: new Date().toISOString(),
-              })
+              .update({ status: 'unsubscribed' })
               .eq('id', send.contact_id)
             await db
               .from('email_events')

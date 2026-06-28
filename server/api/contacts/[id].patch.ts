@@ -26,7 +26,8 @@ export default defineEventHandler(async (event) => {
   }
 
   // Map camelCase input → snake_case columns, skipping absent fields so we never
-  // overwrite with nulls.
+  // overwrite with nulls. A DB trigger maintains `updated_at` (task 4.3); seeding
+  // it keeps a no-op PATCH a non-empty (valid) update.
   const update: Database['public']['Tables']['contacts']['Update'] = {
     updated_at: new Date().toISOString(),
   }

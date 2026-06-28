@@ -924,18 +924,129 @@ Goal: smart targeting with custom contact attributes, dynamic segments, and basi
 Goal: production reliability, observability, and a clean handoff to any future maintainer.
 
 ### 4.1 SES reputation monitoring
-- [ ] Dashboard widget showing current bounce rate and complaint rate (last 7 days)
-- [ ] Warning banner if bounce rate > 2% or complaint rate > 0.1% (SES thresholds)
-- [ ] Auto-pause campaign sending if thresholds are exceeded (update campaign status to 'paused')
+- [x] Dashboard widget showing current bounce rate and complaint rate (last 7 days)
+- [x] Warning banner if bounce rate > 2% or complaint rate > 0.1% (SES thresholds)
+- [x] Auto-pause campaign sending if thresholds are exceeded (update campaign status to 'paused')
+
+> **4.1 notes (2026-06-28)**
+> - **Migration `20260628000001_campaigns_add_paused_status.sql`** — adds
+>   `'paused'` to the `campaigns_status_check` set. **Applied 2026-06-28**
+>   (MCP read-only, see [[supabase-mcp-readonly]]). `database.types.ts` +
+>   `campaignStatusSchema` updated to match.
+> - **Shared thresholds** `shared/reputation.ts` (dependency-free, like
+>   `shared/segments.ts` — imported by the app via `#shared/reputation` and the
+>   worker via `../shared/reputation.ts`): `BOUNCE_RATE_THRESHOLD=2%`,
+>   `COMPLAINT_RATE_THRESHOLD=0.1%`, `REPUTATION_WINDOW_DAYS=7`,
+>   `REPUTATION_MIN_SAMPLE=50`, and a pure `computeReputation({totalSent, bounced,
+>   complained})` → rates (2dp) + `bounceExceeded`/`complaintExceeded` flags. A
+>   threshold is "exceeded" only with **≥50 sends in the window** (one bounce in a
+>   handful of test sends won't trip the banner or halt sending).
+> - **Widget + banner** (`GET /api/dashboard/stats` → new `reputation` block,
+>   computed in the existing single-pass sends loop — no extra query; bounced/
+>   complained sends keep their original `sent_at`, so the 7-day window catches
+>   them). Dashboard (`app/pages/index.vue`): a conditional red **"Deliverability
+>   at risk"** banner when either rate is exceeded, plus bounce/complaint-rate
+>   readings under the Campaign Health donut (red when over threshold).
+> - **Auto-pause** `worker/lib/reputation-guard.ts` — a 60s loop (mirrors the
+>   scheduler/SQS-poller plugins; first sweep at 8s; `NUXT_REPUTATION_GUARD_DISABLED`
+>   to disable). Measures the account-wide 7-day rate via head COUNT queries and,
+>   when exceeded, flips every `status='sending'` campaign → `'paused'`. Wired into
+>   `worker/index.ts` (+ `stop()` in graceful shutdown).
+> - **Enforcement**: `email-send.ts` now skips any send whose campaign is no
+>   longer `'sending'` (paused/cancelled), leaving the send `queued` so a
+>   re-dispatch can resume it — this is what actually stops in-flight queued jobs
+>   draining to SES (also makes mid-send cancel effective). Resume UI/endpoint is
+>   not in 4.1 scope (re-dispatch the campaign to continue).
+> - **Paused status** surfaced in the UI: `CampaignStatusBadge` + campaigns-list
+>   row meta + status-filter dropdown gained an amber **Paused** entry.
+> - Verified: `computeReputation` unit 11/11 (empty/healthy/over-threshold for
+>   bounce + complaint, the 2% boundary is not-exceeded, and the min-sample gate).
+>   **Live auto-pause (real Supabase, service-role) 1/1:** seeded a `sending`
+>   campaign + 60 sends (3 bounced = ~5%), started the real guard → its boot sweep
+>   measured 4.92% bounce and flipped the campaign to `paused` (confirming the
+>   migration is applied); seed cleaned up. `pnpm typecheck`, worker `tsc`,
+>   `pnpm lint`, `pnpm build` all clean.
 
 ### 4.2 Alerts
-- [ ] In-app notification when a campaign exceeds bounce/complaint thresholds
-- [ ] Optional: send alert email via SES to a configured admin address
+- [x] In-app notification when a campaign exceeds bounce/complaint thresholds
+- [ ] Optional: send alert email via SES to a configured admin address  _(deferred per user — in-app only for now)_
+
+> **4.2 notes (2026-06-28)**
+> - **Scope (confirmed with user):** in-app notifications are **routed to the
+>   campaign's creator** (each user sees only their own alerts), and the optional
+>   SES admin-email alert is **deferred**. Detection stays the 4.1 account-wide
+>   reputation guard; only *delivery* is per-creator (one notification per paused
+>   campaign, to its owner).
+> - **Migration `20260628000002_notifications.sql`** — **applied 2026-06-28**
+>   (MCP read-only, see [[supabase-mcp-readonly]]). Adds (1)
+>   `campaigns.created_by uuid → auth.users(id) ON DELETE SET NULL` (+ index) —
+>   the project's **first per-user ownership column** (only drives alert routing,
+>   not data access; existing campaigns stay NULL → no alert, fill in going
+>   forward); (2) a **`notifications`** table (`user_id, type, severity, title,
+>   body, campaign_id, metadata, read_at, created_at`) with **per-user RLS**
+>   (SELECT/UPDATE `user_id = auth.uid()`, no INSERT policy — only the
+>   service-role worker writes). `database.types.ts` updated (+ `NotificationSeverity`).
+> - **Ownership wired:** `POST /api/campaigns` now sets `created_by = user.id`
+>   (requireUser already returns the user).
+> - **Alert generation:** `worker/lib/reputation-guard.ts` — when the guard
+>   pauses `sending` campaigns it now selects `id, name, created_by` and inserts
+>   one `reputation_paused` (severity `critical`) notification per paused campaign
+>   for its creator (campaigns with no creator are skipped). Fires once per breach
+>   (paused campaigns are no longer `sending`, so the next tick is a no-op).
+> - **API:** `GET /api/notifications` (own feed, newest 50, + unread count — RLS
+>   scoped) and `POST /api/notifications/read` (`{ id? }`; omit id = mark all
+>   unread read).
+> - **UI:** `app/components/NotificationBell.vue` replaces the static topbar bell
+>   — real unread badge, dropdown feed (severity dot, relative time, unread
+>   highlight), click-to-mark-read + navigate to the campaign, "Mark all read",
+>   polls every 60s. Removed the now-dead `.icon-btn*` styles from the layout.
+> - Verified: `pnpm typecheck`, worker `tsc`, `pnpm lint`, `pnpm build` all clean.
+>   **Live end-to-end (real Supabase, service-role) 8/8:** seeded a `sending`
+>   campaign owned by a real user + 60 sends (3 bounced) → the real guard paused
+>   it and wrote exactly one `reputation_paused` / `critical` notification routed
+>   to the owner, starting unread, body naming the campaign; service-role
+>   mark-read set `read_at`. **RLS scoping confirmed:** an anon-key read of
+>   `notifications` returns 0 rows (policy filters to `auth.uid()`), so a user
+>   can't see another's alerts. Seed cleaned up.
 
 ### 4.3 Supabase RLS audit
-- [ ] Review all RLS policies — confirm no table is accidentally exposed
-- [ ] Add `updated_at` trigger function for tables that need it
-- [ ] Add DB indexes on high-traffic columns: `sends.campaign_id`, `sends.ses_message_id`, `email_events.send_id`, `contacts.email`
+- [x] Review all RLS policies — confirm no table is accidentally exposed
+- [x] Add `updated_at` trigger function for tables that need it
+- [x] Add DB indexes on high-traffic columns: `sends.campaign_id`, `sends.ses_message_id`, `email_events.send_id`, `contacts.email`
+
+> **4.3 notes (2026-06-28 — audited directly against the live DB via a pooler
+> connection string the user provided; migrations now applied by me, not by hand)**
+> - **RLS audit — clean, no changes needed.** All 9 public tables (contacts,
+>   lists, list_contacts, campaigns, templates, sends, email_events,
+>   tracking_tokens, notifications) have `rowsecurity = true`. The 8 internal
+>   tables each carry one permissive `FOR ALL TO authenticated` policy
+>   (`auth.uid() IS NOT NULL`); `notifications` is stricter (SELECT/UPDATE scoped
+>   to `user_id = auth.uid()`, no INSERT/DELETE policy → only the service-role
+>   worker writes). **`anon` has zero policies on any table** → fully default-deny
+>   for unauthenticated requests. No views in `public` (so nothing bypasses RLS).
+>   Service-role flows (worker, tracking routes, SES webhook) bypass RLS by key,
+>   unaffected.
+> - **Migration `20260628000003_updated_at_triggers.sql`** (applied):
+>   - `public.set_updated_at()` trigger fn (`SET search_path = ''` to satisfy the
+>     Supabase security advisor) + `BEFORE UPDATE` triggers on the only three
+>     tables with an `updated_at` column: **campaigns, contacts, templates**.
+>   - **Index** `sends_sent_at_idx ON sends (sent_at)` — the four columns the task
+>     names were already indexed in 1.2 (`sends.campaign_id`,
+>     `sends.ses_message_id`, `email_events.send_id`, `contacts.email` UNIQUE), so
+>     this adds the one hot path that wasn't: the 4.1 reputation guard's 60s
+>     rolling-window scans + the dashboard's 7/30-day windows.
+> - **Code cleanup:** removed the now-redundant manual `updated_at = now()` from
+>   ~10 UPDATE sites that always carry another field (contacts delete/restore/
+>   import, campaign send/schedule, unsubscribe, scheduler, reputation-guard, both
+>   SES bounce handlers). **Kept** the explicit set in the 3 generic PATCH builders
+>   (campaigns/contacts/templates `[id].patch`) where it also guarantees a no-op
+>   PATCH is a non-empty (valid) update; comments updated to say the trigger now
+>   owns the value. The trigger overrides any client-supplied `updated_at` anyway.
+> - **Verified live (pooler SQL):** trigger overrides an explicit
+>   `updated_at='2000-01-01'` to `now()`; a **status-only** UPDATE (the new app
+>   behavior — no `updated_at` in the payload) bumps `updated_at` via the trigger
+>   (`trigger_bumped = true`); all 3 triggers + `sends_sent_at_idx` present.
+>   `pnpm typecheck`, worker `tsc`, `pnpm lint`, `pnpm build` all clean.
 
 ### 4.4 Reporting & export
 - [ ] Campaign report page: full send list with per-contact status (sent, opened, clicked, bounced)
@@ -963,3 +1074,19 @@ Goal: production reliability, observability, and a clean handoff to any future m
 - [ ] Document SES production access request process and required DNS records
 - [ ] Document SNS → SQS → webhook wiring steps
 - [ ] Inline JSDoc comments on all worker processors and complex Nitro routes
+
+> **Deployment done (2026-06-27) — Vercel (web) + Railway (worker + Redis)**
+> Live: web on Vercel (serverless), worker + Redis on Railway, Supabase shared.
+> The two always-on Nitro plugins (scheduler + SQS poller) were moved into the
+> worker (`worker/lib/{scheduler,sqs-poller}.ts`) since Vercel is serverless; the
+> web only enqueues. Full runbook in **`docs/DEPLOY.md`** (covers the "Railway
+> deploy steps" + env-var split above — README still TODO). See
+> [[deployment-vercel-railway]] for the Railway/Nixpacks pnpm gotchas.
+> - **Verified end-to-end in prod** (`sendinal.vercel.app`): auth guards, all
+>   authenticated APIs, `config/sending`, `template_id` round-trip, and the full
+>   send pipe Vercel → Railway Redis → worker `campaign.dispatch` → `email.send`
+>   → SES (real API call). Only blocker for real delivery is the **SES sandbox**
+>   (see [[ses-sandbox-blocker]]).
+> - Required fix found during testing: `NUXT_SES_FROM_EMAIL`/`NUXT_SES_FROM_NAME`
+>   must be set on the **web** (Vercel), else campaigns get an empty `from_email`
+>   and every send fails worker validation.

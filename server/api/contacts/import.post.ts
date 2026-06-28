@@ -65,7 +65,6 @@ export default defineEventHandler(async (event) => {
   }
   const existing = new Map((existingRows ?? []).map((r) => [r.email, r.id]))
 
-  const now = new Date().toISOString()
   const fieldsOf = (c: (typeof rows)[number]) => ({
     email: c.email,
     first_name: c.firstName ?? null,
@@ -110,7 +109,7 @@ export default defineEventHandler(async (event) => {
   for (const u of toUpdate) {
     const { data, error } = await supabase
       .from('contacts')
-      .update({ ...u.fields, deleted_at: null, updated_at: now })
+      .update({ ...u.fields, deleted_at: null })
       .eq('id', u.id)
       .select('id')
       .maybeSingle()

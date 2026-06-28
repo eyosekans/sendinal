@@ -8,6 +8,7 @@ import { SES_DRY_RUN } from './lib/ses.ts'
 import { DEFAULT_SES_RATE_PER_SECOND } from '../shared/sending.ts'
 import { startScheduler } from './lib/scheduler.ts'
 import { startSqsPoller } from './lib/sqs-poller.ts'
+import { startReputationGuard } from './lib/reputation-guard.ts'
 
 /**
  * BullMQ worker entry point (Railway: worker service).
@@ -47,6 +48,7 @@ const dispatchQueue = new Queue(QUEUE_NAMES.campaignDispatch, {
 // they keep running when the web app is a serverless (Vercel) deployment.
 const scheduler = startScheduler(dispatchQueue)
 const sqsPoller = startSqsPoller()
+const reputationGuard = startReputationGuard()
 
 for (const worker of workers) {
   worker.on('ready', () => console.log(`[worker] ${worker.name} ready`))
@@ -86,6 +88,7 @@ async function shutdown(signal: string) {
   console.log(`[worker] received ${signal}, shutting down…`)
   scheduler.stop()
   sqsPoller.stop()
+  reputationGuard.stop()
   await Promise.all(workers.map((w) => w.close()))
   await dispatchQueue.close()
   await connection.quit()

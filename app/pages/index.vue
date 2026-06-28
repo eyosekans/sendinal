@@ -29,6 +29,9 @@ function fmtNum(n: number) {
 function fmtPct(v: number | null) {
   return v == null ? '—' : `${v.toFixed(1)}%`
 }
+function fmtPct2(v: number | null) {
+  return v == null ? '—' : `${v.toFixed(2)}%`
+}
 function fmtDate(iso: string | null) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('en-US', {
@@ -121,6 +124,23 @@ const axisLabels = computed(() => {
 
 const health = computed(() => stats.value?.health)
 
+/* ---------- SES reputation (task 4.1) ---------- */
+const rep = computed(() => stats.value?.reputation)
+const repAlert = computed(() => {
+  const r = rep.value
+  if (!r) return null
+  const issues: string[] = []
+  if (r.bounceExceeded)
+    issues.push(
+      `bounce rate ${r.bounceRate?.toFixed(2)}% (limit ${r.bounceThreshold}%)`,
+    )
+  if (r.complaintExceeded)
+    issues.push(
+      `complaint rate ${r.complaintRate?.toFixed(2)}% (limit ${r.complaintThreshold}%)`,
+    )
+  return issues.length ? issues : null
+})
+
 const { search, placeholder } = useTopbar()
 search.value = ''
 placeholder.value = 'Search campaigns, contacts…'
@@ -135,6 +155,20 @@ placeholder.value = 'Search campaigns, contacts…'
         <div class="header">
           <h1 class="header__title">Dashboard</h1>
           <p class="header__sub">Overview of your marketing performance.</p>
+        </div>
+
+        <!-- SES reputation alert (task 4.1) -->
+        <div v-if="repAlert" class="alert" role="alert">
+          <i class="ph ph-warning-octagon alert__icon" />
+          <div class="alert__body">
+            <p class="alert__title">Deliverability at risk</p>
+            <p class="alert__text">
+              Your 7-day {{ repAlert.join(' and ') }}
+              {{ repAlert.length > 1 ? 'exceed' : 'exceeds' }} the SES
+              threshold. Any sending campaign is paused automatically until your
+              rates recover.
+            </p>
+          </div>
         </div>
 
         <!-- metric cards -->
@@ -215,6 +249,33 @@ placeholder.value = 'Search campaigns, contacts…'
                 }}</span>
               </div>
             </div>
+
+            <!-- SES reputation readings (task 4.1) -->
+            <div class="rep">
+              <div
+                class="rep__row"
+                :class="{ 'rep__row--bad': rep?.bounceExceeded }"
+              >
+                <span class="rep__label">Bounce rate</span>
+                <span class="rep__val">{{
+                  fmtPct2(rep?.bounceRate ?? null)
+                }}</span>
+              </div>
+              <div
+                class="rep__row"
+                :class="{ 'rep__row--bad': rep?.complaintExceeded }"
+              >
+                <span class="rep__label">Complaint rate</span>
+                <span class="rep__val">{{
+                  fmtPct2(rep?.complaintRate ?? null)
+                }}</span>
+              </div>
+              <div class="rep__note">
+                Last {{ rep?.windowDays ?? 7 }} days · SES limits
+                {{ rep?.bounceThreshold ?? 2 }}% /
+                {{ rep?.complaintThreshold ?? 0.1 }}%
+              </div>
+            </div>
           </div>
         </div>
 
@@ -289,6 +350,65 @@ placeholder.value = 'Search campaigns, contacts…'
   margin: 6px 0 0;
   font-size: 14px;
   color: var(--gray-500);
+}
+
+/* SES reputation alert */
+.alert {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: var(--danger-100);
+  border: 1px solid #f3b9b9;
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+}
+.alert__icon {
+  font-size: 20px;
+  color: var(--danger-600);
+  margin-top: 1px;
+}
+.alert__title {
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--danger-600);
+}
+.alert__text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #8f2a2e;
+}
+
+/* reputation readings (Campaign Health panel) */
+.rep {
+  border-top: 1px solid var(--gray-100);
+  margin-top: 14px;
+  padding-top: 14px;
+}
+.rep__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.rep__label {
+  color: var(--gray-600);
+}
+.rep__val {
+  font-weight: 500;
+  color: var(--gray-800);
+  font-variant-numeric: tabular-nums;
+}
+.rep__row--bad .rep__val {
+  color: var(--danger-600);
+}
+.rep__note {
+  font-size: 11px;
+  color: var(--gray-400);
+  margin-top: 2px;
 }
 
 /* metric cards */

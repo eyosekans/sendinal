@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
   // Atomically claim the campaign for sending (guards against double-dispatch).
   const { data: claimed, error: upErr } = await supabase
     .from('campaigns')
-    .update({ status: 'sending', updated_at: new Date().toISOString() })
+    .update({ status: 'sending' })
     .eq('id', id)
     .in('status', ['draft', 'scheduled'])
     .select('id')

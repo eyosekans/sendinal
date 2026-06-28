@@ -108,7 +108,7 @@ export async function processSesNotification(
   // 2) Suppress the contact so future campaigns skip it.
   const { error: upContactErr } = await supabase
     .from('contacts')
-    .update({ status: newStatus, updated_at: nowIso })
+    .update({ status: newStatus })
     .eq('id', send.contact_id)
   if (upContactErr) throw upContactErr
 

@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
   const supabase = await serverSupabaseClient<Database>(event)
   const { data, error } = await supabase
     .from('contacts')
-    .update({ deleted_at: now, updated_at: now })
+    .update({ deleted_at: now })
     .eq('id', id)
     .is('deleted_at', null)
     .select('id')

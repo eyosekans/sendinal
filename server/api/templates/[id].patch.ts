@@ -6,8 +6,9 @@ import { updateTemplateSchema } from '#shared/schemas'
 /**
  * PATCH /api/templates/:id
  * Update a template (rename, or save new subject/HTML/design). Partial — only
- * the provided fields change. `updated_at` is set manually (the DB trigger is
- * deferred to task 4.3).
+ * the provided fields change. A DB trigger maintains `updated_at` (task 4.3);
+ * we still seed it here so a no-op PATCH (no changed fields) is a non-empty
+ * update rather than an error.
  */
 export default defineEventHandler(async (event) => {
   await requireUser(event)
