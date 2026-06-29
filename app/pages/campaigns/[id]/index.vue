@@ -15,7 +15,7 @@ const id = route.params.id as string
 
 const { data: campaign, error: campaignError, refresh: refreshCampaign } =
   await useFetch<CampaignDetail>(`/api/campaigns/${id}`)
-const { data: stats } = await useFetch<CampaignStats>(
+const { data: stats, refresh: refreshStats } = await useFetch<CampaignStats>(
   `/api/campaigns/${id}/stats`,
 )
 const { data: series } = await useFetch<CampaignTimeseries>(
@@ -27,7 +27,7 @@ const { data: linksRes } = await useFetch<{ links: CampaignLink[] }>(
   { default: () => ({ links: [] }) },
 )
 const activityPage = ref(1)
-const { data: activityRes } = await useFetch(`/api/campaigns/${id}/activity`, {
+const { data: activityRes, refresh: refreshActivity } = await useFetch(`/api/campaigns/${id}/activity`, {
   query: { page: activityPage, limit: 8 },
   default: () => ({
     data: [] as CampaignActivityRow[],
@@ -54,6 +54,46 @@ const canEdit = computed(
     campaign.value?.status === 'scheduled',
 )
 const isScheduled = computed(() => campaign.value?.status === 'scheduled')
+
+/* ---------- live send progress (polling while status='sending') ---------- */
+const isSending = computed(() => campaign.value?.status === 'sending')
+const sendProgress = computed(() => {
+  const s = stats.value
+  if (!s || !s.recipients) return null
+  const total = s.recipients
+  // A send leaves 'queued' once the worker processes it (sent/failed/bounced/
+  // complained), so processed = total - queued drives the bar to 100%.
+  const processed = total - s.counts.queued
+  return {
+    total,
+    sent: s.counts.sent,
+    failed: s.counts.failed,
+    queued: s.counts.queued,
+    processed,
+    pct: Math.min(100, Math.round((processed / total) * 100)),
+  }
+})
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+function startPolling() {
+  if (pollTimer || !import.meta.client) return
+  pollTimer = setInterval(async () => {
+    await Promise.all([refreshStats(), refreshCampaign(), refreshActivity()])
+    // campaign flips to 'sent'/'paused'/'cancelled' when the worker finishes.
+    if (campaign.value?.status !== 'sending') stopPolling()
+  }, 3000)
+}
+onMounted(() => {
+  if (isSending.value) startPolling()
+})
+watch(isSending, (sending) => (sending ? startPolling() : stopPolling()))
+onBeforeUnmount(stopPolling)
 
 /* ---------- cancel a scheduled send ---------- */
 const showCancel = ref(false)
@@ -262,6 +302,41 @@ const actMeta = (s: string) => ACT[s] ?? ACT.delivered!
               >
                 <i class="ph ph-arrow-square-out" /> Export
               </button>
+            </div>
+          </div>
+
+          <!-- live send progress (polls while sending) -->
+          <div v-if="isSending && sendProgress" class="sendbar">
+            <div class="sendbar__head">
+              <span class="sendbar__title">
+                <span class="sendbar__spinner" />
+                Sending campaign…
+              </span>
+              <span class="sendbar__count">
+                {{ fmtNum(sendProgress.sent) }} /
+                {{ fmtNum(sendProgress.total) }} sent
+              </span>
+            </div>
+            <div
+              class="sendbar__track"
+              role="progressbar"
+              :aria-valuenow="sendProgress.pct"
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
+              <div
+                class="sendbar__fill"
+                :style="{ width: sendProgress.pct + '%' }"
+              />
+            </div>
+            <div class="sendbar__meta">
+              <span>{{ sendProgress.pct }}% complete</span>
+              <span v-if="sendProgress.queued" class="sendbar__dot">
+                {{ fmtNum(sendProgress.queued) }} queued
+              </span>
+              <span v-if="sendProgress.failed" class="sendbar__failed">
+                {{ fmtNum(sendProgress.failed) }} failed
+              </span>
             </div>
           </div>
 
@@ -579,6 +654,83 @@ const actMeta = (s: string) => ACT[s] ?? ACT.delivered!
 }
 .btn-ghost-danger .ph {
   font-size: 16px;
+}
+
+/* live send progress bar */
+.sendbar {
+  background: #fff;
+  border: 1px solid var(--primary-200);
+  border-radius: 10px;
+  padding: 18px 22px;
+  margin-bottom: 20px;
+}
+.sendbar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.sendbar__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--gray-800);
+}
+.sendbar__spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--primary-200);
+  border-top-color: var(--primary-600);
+  animation: sendbar-spin 0.7s linear infinite;
+}
+@keyframes sendbar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.sendbar__count {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-800);
+  font-variant-numeric: tabular-nums;
+}
+.sendbar__track {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--gray-100);
+  overflow: hidden;
+}
+.sendbar__fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--primary-600);
+  transition: width 0.4s ease;
+}
+.sendbar__meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--gray-500);
+  font-variant-numeric: tabular-nums;
+}
+.sendbar__dot::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gray-300);
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.sendbar__failed {
+  color: var(--danger-600);
 }
 
 /* cards + chart grid */
