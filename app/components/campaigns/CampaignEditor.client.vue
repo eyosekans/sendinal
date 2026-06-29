@@ -23,6 +23,14 @@ const props = defineProps<{
   initialDesign?: object | null
 }>()
 
+// Force Unlayer into email mode. Without this the editor defaults to a web
+// layout and exportHtml() emits a flexbox/div document (`.u-row{display:flex}`,
+// `flex:0 0 33%`, `100vh`) that looks perfect in the browser preview but
+// collapses in real email clients (Outlook has no flex support; Gmail/Yandex
+// strip or ignore it). Email mode makes exportHtml() produce table-based,
+// inline-styled, Outlook-safe HTML.
+const editorOptions = { displayMode: 'email' as const }
+
 const emit = defineEmits<{ ready: []; change: [] }>()
 
 const editorRef = ref<{ editor: Unlayer } | null>(null)
@@ -82,6 +90,7 @@ defineExpose({ loadDesign, exportHtml })
     ref="editorRef"
     class="editor"
     :min-height="'100%'"
+    :options="editorOptions"
     @ready="init"
     @load="init"
   />
