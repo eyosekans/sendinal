@@ -67,6 +67,12 @@ const FILE_TEMPLATES: FileTemplate[] = [
     subject: "You're invited to our webinar",
     category: 'Announcement',
   },
+  {
+    file: 'event-invitation.html',
+    name: 'Event Invitation',
+    subject: "You're invited to a special event",
+    category: 'Announcement',
+  },
 ]
 
 /** Pull the <style> blocks + <body> inner out of a full HTML document. */
