@@ -3,6 +3,11 @@
 // editor loads a remote embed script and touches `window`, so it must never
 // render during SSR.
 import { EmailEditor } from 'vue-email-editor'
+import {
+  UNSUBSCRIBE_PLACEHOLDER,
+  designHasUnsubscribe,
+  ensureUnsubscribeRow,
+} from '#shared/unsubscribe'
 
 /** Minimal surface of the underlying Unlayer instance we use. */
 interface Unlayer {
@@ -29,7 +34,16 @@ const props = defineProps<{
 // collapses in real email clients (Outlook has no flex support; Gmail/Yandex
 // strip or ignore it). Email mode makes exportHtml() produce table-based,
 // inline-styled, Outlook-safe HTML.
-const editorOptions = { displayMode: 'email' as const }
+// `specialLinks` offers the per-recipient unsubscribe link in the link picker,
+// so users can re-insert it anywhere after editing the footer text. The embed
+// runtime documents an array here, but the published TS type wants a keyed
+// map — cast to keep the documented runtime shape.
+const editorOptions = {
+  displayMode: 'email' as const,
+  specialLinks: [
+    { name: 'Unsubscribe', href: UNSUBSCRIBE_PLACEHOLDER, target: '_self' },
+  ] as unknown as Record<string, { name: string; href: string; target?: string }>,
+}
 
 const emit = defineEmits<{ ready: []; change: [] }>()
 
@@ -57,7 +71,11 @@ function init() {
     }
   })
 
-  if (props.initialDesign) unlayer.loadDesign(props.initialDesign)
+  // Every design must carry the mandatory unsubscribe block (compliance). A
+  // blank editor also starts from a design holding just that row.
+  unlayer.loadDesign(
+    ensureUnsubscribeRow(props.initialDesign ?? { body: { rows: [] } }).design,
+  )
 
   // Surface user edits so the builder can autosave.
   unlayer.addEventListener('design:updated', () => emit('change'))
@@ -65,29 +83,42 @@ function init() {
   emit('ready')
 }
 
-/** Load a design (e.g. when applying a template after the editor is ready). */
+/** Load a design (e.g. when applying a template after the editor is ready).
+ *  The mandatory unsubscribe block is appended if the design lacks one. */
 function loadDesign(design: object) {
-  editorRef.value?.editor.loadDesign(design)
+  editorRef.value?.editor.loadDesign(ensureUnsubscribeRow(design).design)
 }
 
-/** Resolve with the current exported HTML + design JSON. */
-function exportHtml(): Promise<{ html: string; design: object }> {
-  return new Promise((resolve, reject) => {
-    const unlayer = editorRef.value?.editor
-    if (!unlayer) {
-      reject(new Error('Editor not ready'))
-      return
-    }
+function rawExport(unlayer: Unlayer): Promise<{ html: string; design: object }> {
+  return new Promise((resolve) => {
     unlayer.exportHtml((data) => resolve({ html: data.html, design: data.design }))
   })
+}
+
+/** Resolve with the current exported HTML + design JSON. Safety net: if the
+ *  unsubscribe block somehow went missing, re-add it and export again. */
+async function exportHtml(): Promise<{ html: string; design: object }> {
+  const unlayer = editorRef.value?.editor
+  if (!unlayer) throw new Error('Editor not ready')
+
+  const first = await rawExport(unlayer)
+  if (designHasUnsubscribe(first.design)) return first
+
+  unlayer.loadDesign(ensureUnsubscribeRow(first.design).design)
+  return rawExport(unlayer)
 }
 
 defineExpose({ loadDesign, exportHtml })
 </script>
 
 <template>
+  <!-- editor-id pins the container id: without it the library mints a new
+       counter-based id per instance, and a remount while embed.js is still
+       loading makes createEditor look up a stale id, throw, and leave the
+       editor stuck on "Loading editor…". -->
   <EmailEditor
     ref="editorRef"
+    editor-id="campaign-editor"
     class="editor"
     :min-height="'100%'"
     :options="editorOptions"

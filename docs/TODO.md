@@ -26,12 +26,25 @@ Proje geliştirme görevlerinin kategorilere ayrılmış ve önceliklendirilmiş
 
 ## ✨ Feature
 
-- [ ] **E-posta şablonlarına zorunlu Unsubscribe bölümü** — 🚨 Yüksek
+- [x] **E-posta şablonlarına zorunlu Unsubscribe bölümü** — 🚨 Yüksek
   Tüm e-posta şablonlarına varsayılan olarak bir "Abonelikten Çık" bölümü eklenmeli. Yasal/uyumluluk gereksinimi olduğu için kaldırılabilir olmamalı.
-  - [ ] Şablon motoruna sabit (non-removable) bir Unsubscribe bloğu tanımla
-  - [ ] Blok içeriğinin (metin, link, stil) kullanıcı tarafından düzenlenebilmesini sağla
-  - [ ] Var olan tüm şablonlara geriye dönük olarak bu bölümü otomatik ekle
-  - [ ] Kullanıcının bölümü silmeye çalıştığı durumları engelleyen UI/validasyon kontrolü ekle
+  - [x] Şablon motoruna sabit (non-removable) bir Unsubscribe bloğu tanımla
+  - [x] Blok içeriğinin (metin, link, stil) kullanıcı tarafından düzenlenebilmesini sağla
+  - [x] Var olan tüm şablonlara geriye dönük olarak bu bölümü otomatik ekle
+  - [x] Kullanıcının bölümü silmeye çalıştığı durumları engelleyen UI/validasyon kontrolü ekle
+
+  > **Çözüm (2026-07-18):** `shared/unsubscribe.ts` — kilitli footer satırı
+  > (`deletable/duplicatable/draggable/hideable:false`, metin+link+stil serbest,
+  > `{{unsubscribe_url}}` placeholder'lı) + `ensureUnsubscribeRow` /
+  > `appendUnsubscribeFooter` yardımcıları. Editör wrapper'ı her yüklemede
+  > (boş tasarım dahil) bloğu garanti eder; export güvenlik ağı eksikse yeniden
+  > ekler; Unlayer link picker'ına "Unsubscribe" special link eklendi. Mevcut
+  > şablonlar `node --env-file=.env scripts/add-unsubscribe-block.ts` ile
+  > geriye dönük güncellendi (2 şablon; idempotent, `--dry-run` destekli).
+  > Kullanıcı linki metinden silse bile worker'ın `injectUnsubscribe` fallback'i
+  > gönderimde uyumluluğu korur. Ayrıca bulunan bir bug fixlendi: vue-email-editor
+  > sabit `editor-id` verilmeden remount+yavaş embed.js yarışında "Could not find
+  > a valid element" fırlatıp editörü sonsuz "Loading editor…"da bırakıyordu.
 
 - [ ] **Kampanya detay sayfasına gelişmiş filtreleme** — ⚡ Orta
   Kampanya detay sayfasına Search, Pagination ve durum (status) filtresi eklenmeli.
