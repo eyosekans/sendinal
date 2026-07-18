@@ -6,6 +6,7 @@ import type {
   CampaignStats,
   CampaignTimeseries,
 } from '~/types/campaign'
+import { ACTIVITY_STATUSES, type ActivityStatus } from '#shared/schemas'
 import CampaignStatusBadge from '~/components/campaigns/CampaignStatusBadge.vue'
 import ConfirmDeleteModal from '~/components/ConfirmDeleteModal.vue'
 import EngagementLineChart from '~/components/dashboard/EngagementLineChart.client.vue'
@@ -27,14 +28,37 @@ const { data: linksRes } = await useFetch<{ links: CampaignLink[] }>(
   { default: () => ({ links: [] }) },
 )
 const activityPage = ref(1)
+const activitySearchInput = ref('')
+const activitySearch = ref('')
+const activityStatus = ref<ActivityStatus | ''>('')
+const activityQuery = computed(() => ({
+  page: activityPage.value,
+  limit: 8,
+  ...(activitySearch.value ? { search: activitySearch.value } : {}),
+  ...(activityStatus.value ? { status: activityStatus.value } : {}),
+}))
 const { data: activityRes, refresh: refreshActivity } = await useFetch(`/api/campaigns/${id}/activity`, {
-  query: { page: activityPage, limit: 8 },
+  query: activityQuery,
   default: () => ({
     data: [] as CampaignActivityRow[],
     total: 0,
     page: 1,
     limit: 8,
   }),
+})
+
+// Debounce the search box; any filter change restarts from page 1 so the
+// page count and total always describe the filtered set.
+let activitySearchTimer: ReturnType<typeof setTimeout> | undefined
+watch(activitySearchInput, (v) => {
+  clearTimeout(activitySearchTimer)
+  activitySearchTimer = setTimeout(() => {
+    activitySearch.value = v.trim()
+    activityPage.value = 1
+  }, 300)
+})
+watch(activityStatus, () => {
+  activityPage.value = 1
 })
 
 useHead({
@@ -463,6 +487,23 @@ const actMeta = (s: string) => ACT[s] ?? ACT.delivered!
                 >{{ fmtNum(activityTotal) }} recipients</span
               >
             </div>
+            <div class="atoolbar">
+              <div class="asearch">
+                <i class="ph ph-magnifying-glass" />
+                <input
+                  v-model="activitySearchInput"
+                  type="text"
+                  class="asearch__input"
+                  placeholder="Search recipients by name or email…"
+                />
+              </div>
+              <select v-model="activityStatus" class="aselect">
+                <option value="">All statuses</option>
+                <option v-for="s in ACTIVITY_STATUSES" :key="s" :value="s">
+                  {{ actMeta(s).label }}
+                </option>
+              </select>
+            </div>
             <div class="arow ahead">
               <span>Recipient</span>
               <span>Status</span>
@@ -484,7 +525,11 @@ const actMeta = (s: string) => ACT[s] ?? ACT.delivered!
               <span class="r atime">{{ fmtActivityTime(a.at) }}</span>
             </div>
             <div v-if="!activity.length" class="tableempty">
-              No recipients yet.
+              {{
+                activitySearch || activityStatus
+                  ? 'No recipients match these filters.'
+                  : 'No recipients yet.'
+              }}
             </div>
             <div v-if="activityTotal > activityLimit" class="apager">
               <span class="apager__label"
@@ -1002,6 +1047,62 @@ const actMeta = (s: string) => ACT[s] ?? ACT.delivered!
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--gray-500);
+}
+.atoolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 22px 14px;
+}
+.asearch {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+.asearch .ph {
+  font-size: 15px;
+  color: var(--gray-400);
+}
+.asearch__input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  color: var(--gray-800);
+}
+.asearch__input::placeholder {
+  color: var(--gray-400);
+}
+.asearch:focus-within {
+  border-color: var(--primary-600);
+  outline: 2px solid var(--primary-100);
+  outline-offset: 0;
+}
+.aselect {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: #fff;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  color: var(--gray-700);
+  outline: none;
+  cursor: pointer;
+}
+.aselect:focus {
+  border-color: var(--primary-600);
+  outline: 2px solid var(--primary-100);
+  outline-offset: 0;
 }
 .r {
   text-align: right;

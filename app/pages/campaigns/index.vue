@@ -6,15 +6,17 @@ import ConfirmDeleteModal from '~/components/ConfirmDeleteModal.vue'
 
 useHead({ title: 'Campaigns — Sendinal' })
 
-// Shared layout top bar drives the search query.
-const { search: searchInput, placeholder } = useTopbar()
-searchInput.value = ''
-placeholder.value = 'Search campaigns…'
+// Shared list controls: topbar-bound debounced search + page + persisted
+// page size (see useListControls).
+const {
+  searchInput,
+  search: debouncedSearch,
+  page,
+  pageSize,
+  resetSearch,
+} = useListControls('campaigns', { topbarPlaceholder: 'Search campaigns…' })
 
 /* ---------- query state ---------- */
-const LIMIT = 25
-const page = ref(1)
-const debouncedSearch = ref('')
 const statusFilter = ref<'all' | CampaignStatus>('all')
 const statusOpen = ref(false)
 const sortKey = ref<
@@ -26,7 +28,7 @@ const SERVER_SORT = new Set(['name', 'status', 'sentDate'])
 
 const listQuery = computed(() => ({
   page: page.value,
-  limit: LIMIT,
+  limit: pageSize.value,
   ...(debouncedSearch.value ? { search: debouncedSearch.value } : {}),
   ...(statusFilter.value !== 'all' ? { status: statusFilter.value } : {}),
   // Derived-column sorts are applied client-side; ask the server for newest-first.
@@ -44,7 +46,7 @@ const {
     data: [] as CampaignListItem[],
     total: 0,
     page: 1,
-    limit: LIMIT,
+    limit: pageSize.value,
   }),
 })
 
@@ -68,16 +70,8 @@ const displayed = computed(() => {
   })
 })
 
-/* ---------- search (debounced) ---------- */
-let searchTimer: ReturnType<typeof setTimeout> | undefined
-watch(searchInput, (v) => {
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    debouncedSearch.value = v.trim()
-    page.value = 1
-    clearSelection()
-  }, 300)
-})
+// Row selection shouldn't survive a change of what's being listed.
+watch([debouncedSearch, pageSize], () => clearSelection())
 
 /* ---------- status filter dropdown ---------- */
 const STATUS_OPTIONS: {
@@ -109,10 +103,8 @@ const hasFilters = computed(
   () => debouncedSearch.value !== '' || statusFilter.value !== 'all',
 )
 function clearFilters() {
-  searchInput.value = ''
-  debouncedSearch.value = ''
+  resetSearch()
   statusFilter.value = 'all'
-  page.value = 1
   clearSelection()
 }
 
@@ -156,14 +148,6 @@ const selectedCount = computed(() => selectedIds.value.length)
 function clearSelection() {
   selectedIds.value = []
 }
-
-/* ---------- pagination ---------- */
-const pageCount = computed(() => Math.max(1, Math.ceil(total.value / LIMIT)))
-const canPrev = computed(() => page.value > 1)
-const canNext = computed(() => page.value < pageCount.value)
-const footerText = computed(
-  () => `Showing ${displayed.value.length} of ${total.value} campaigns`,
-)
 
 /* ---------- display helpers ---------- */
 const ROW_META: Record<
@@ -603,27 +587,14 @@ const isEmpty = computed(() => !pending.value && displayed.value.length === 0)
           </div>
 
           <!-- footer -->
-          <div v-if="!isEmpty" class="tfoot">
-            <span class="tfoot__text">{{ footerText }}</span>
-            <div class="tfoot__nav">
-              <button
-                type="button"
-                class="pager"
-                :disabled="!canPrev"
-                @click="page--"
-              >
-                <i class="ph ph-caret-left" /> Previous
-              </button>
-              <button
-                type="button"
-                class="pager"
-                :disabled="!canNext"
-                @click="page++"
-              >
-                Next <i class="ph ph-caret-right" />
-              </button>
-            </div>
-          </div>
+          <ListPager
+            v-if="!isEmpty"
+            v-model:page="page"
+            v-model:page-size="pageSize"
+            :total="total"
+            :shown="displayed.length"
+            noun="campaigns"
+          />
         </div>
       </div>
     </div>
@@ -1147,48 +1118,4 @@ const isEmpty = computed(() => !pending.value && displayed.value.length === 0)
   line-height: 1.6;
 }
 
-/* footer */
-.tfoot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 52px;
-  padding: 0 16px;
-  border-top: 1px solid var(--gray-200);
-  background: var(--gray-50);
-}
-.tfoot__text {
-  font-size: 13px;
-  color: var(--gray-500);
-}
-.tfoot__nav {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.pager {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--gray-200);
-  border-radius: var(--radius-md);
-  background: #fff;
-  color: var(--gray-700);
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.pager:hover:not(:disabled) {
-  background: var(--gray-100);
-}
-.pager:disabled {
-  color: var(--gray-400);
-  cursor: not-allowed;
-}
-.pager .ph {
-  font-size: 14px;
-}
 </style>

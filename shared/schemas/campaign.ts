@@ -66,3 +66,17 @@ export const listCampaignsQuerySchema = z.object({
   dir: z.enum(['asc', 'desc']).default('desc'),
 })
 export type ListCampaignsQuery = z.infer<typeof listCampaignsQuerySchema>
+
+/** Derived per-recipient statuses shown on the campaign activity table. */
+export const ACTIVITY_STATUSES = [
+  'delivered',
+  'clicked',
+  'opened',
+  'unsubscribed',
+  'bounced',
+  'complained',
+  'failed',
+  'queued',
+] as const
+export const activityStatusSchema = z.enum(ACTIVITY_STATUSES)
+export type ActivityStatus = z.infer<typeof activityStatusSchema>

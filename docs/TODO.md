@@ -46,34 +46,65 @@ Proje geliştirme görevlerinin kategorilere ayrılmış ve önceliklendirilmiş
   > sabit `editor-id` verilmeden remount+yavaş embed.js yarışında "Could not find
   > a valid element" fırlatıp editörü sonsuz "Loading editor…"da bırakıyordu.
 
-- [ ] **Kampanya detay sayfasına gelişmiş filtreleme** — ⚡ Orta
+- [x] **Kampanya detay sayfasına gelişmiş filtreleme** — ⚡ Orta
   Kampanya detay sayfasına Search, Pagination ve durum (status) filtresi eklenmeli.
-  - [ ] Arama kutusu (kampanya/alıcı bazlı arama)
-  - [ ] Durum filtresi (ör. gönderildi, beklemede, başarısız, açıldı vb.)
-  - [ ] Filtrelerin sayfalama (pagination) ile birlikte tutarlı çalışması
+  - [x] Arama kutusu (kampanya/alıcı bazlı arama)
+  - [x] Durum filtresi (ör. gönderildi, beklemede, başarısız, açıldı vb.)
+  - [x] Filtrelerin sayfalama (pagination) ile birlikte tutarlı çalışması
+
+  > **Çözüm (2026-07-18):** `GET /api/campaigns/:id/activity` artık `search`
+  > (alıcı e-posta/ad-soyad, case-insensitive) ve `status` (türetilmiş durum:
+  > delivered/clicked/opened/unsubscribed/bounced/complained/failed/queued)
+  > parametrelerini alıyor. Türetilmiş durum sends + email_events'ten geldiği
+  > için filtreleme in-app yapılıyor (stats endpoint'iyle aynı yaklaşım; embedded
+  > join'lerle 2 sorgu, 4.7'de cache'lenebilir) — `total` her zaman filtreli
+  > kümeyi yansıttığından pagination tutarlı. UI: "Individual send results"
+  > panelinde debounced arama kutusu + durum dropdown'ı; filtre değişimi
+  > sayfayı 1'e döndürüyor, filtreli boş durum ayrı mesaj gösteriyor.
+  > Regresyon: `node --env-file=.env tests/campaign-activity.e2e.mjs` (18 senaryo).
 
 ---
 
 ## 🎨 UI/UX
 
-- [ ] **Listeleme ekranlarına arama kutusu eklenmesi** — ⚡ Orta
+- [x] **Listeleme ekranlarına arama kutusu eklenmesi** — ⚡ Orta
   Tüm listeleme ekranlarının üst kısmına ortak bir arama (Search) bileşeni eklenmeli.
-  - [ ] Genel/tekrar kullanılabilir bir Search component tasarımı
-  - [ ] Debounce ile performanslı arama davranışı
+  - [x] Genel/tekrar kullanılabilir bir Search component tasarımı
+  - [x] Debounce ile performanslı arama davranışı
 
-- [ ] **Sayfa başına kayıt sayısı seçimi (Pagination page size)** — 💡 Düşük
+- [x] **Sayfa başına kayıt sayısı seçimi (Pagination page size)** — 💡 Düşük
   Kullanıcı, listeleme ekranlarında sayfa başına gösterilecek kayıt sayısını (ör. 10/25/50/100) seçebilmeli.
-  - [ ] Page size seçim dropdown'ı ekle
-  - [ ] Seçimin kullanıcı tercihine göre hatırlanması (opsiyonel: localStorage/kullanıcı ayarları)
+  - [x] Page size seçim dropdown'ı ekle
+  - [x] Seçimin kullanıcı tercihine göre hatırlanması (opsiyonel: localStorage/kullanıcı ayarları)
+
+  > **Çözüm (2026-07-18):** Ortak arama zaten layout'taki tek topbar Search
+  > bileşeni üzerinden tüm listeleme ekranlarında vardı (contacts/campaigns/
+  > templates ona bağlanıyor); debounce dahil bu davranış artık
+  > `useListControls` composable'ında tek yerde. Page size:
+  > `<ListPager>` (10/25/50/100 dropdown + Previous/Next + "Showing X of Y")
+  > contacts ve campaigns tablolarında; seçim ekran başına cookie'de saklanıyor
+  > (SSR ilk render'da bile hatırlanan boyutla gelir). Templates client-side
+  > filtreli ve sayfalamasız (≤100 kayıt) olduğundan pager kapsam dışı.
 
 ---
 
 ## 🚀 Improvement
 
-- [ ] **Filtreleme/arama altyapısının ortak hale getirilmesi** — 💡 Düşük
+- [x] **Filtreleme/arama altyapısının ortak hale getirilmesi** — 💡 Düşük
   Search, Pagination ve durum filtresi gibi özellikler birden fazla ekranda (listeleme, kampanya detay) tekrar edeceği için ortak, yeniden kullanılabilir bir yapı üzerinden yönetilmesi önerilir.
-  - [ ] Search/Pagination/Filter için ortak hook veya component katmanı oluştur
-  - [ ] Farklı ekranlarda tutarlı UX sağla
+  - [x] Search/Pagination/Filter için ortak hook veya component katmanı oluştur
+  - [x] Farklı ekranlarda tutarlı UX sağla
+
+  > **Çözüm (2026-07-18):** `app/composables/useListControls.ts` — debounced
+  > arama + sayfa + cookie'de saklanan page-size'ı tek yerde yönetir (arama veya
+  > page-size değişince sayfa 1'e döner; `topbarPlaceholder` verilirse topbar'a
+  > bağlanır, verilmezse ekran-yerel arama ref'i üretir) —
+  > + `app/components/ListPager.vue` (footer: sayaç + page-size + Prev/Next).
+  > Contacts ve campaigns sayfalarındaki kopya debounce/pager kodu silinip bu
+  > katmana taşındı. Kampanya detayındaki activity paneli kendi yerel arama/
+  > pager'ını koruyor (yeni yapıldı, panel-stilinde); ileride istenirse
+  > `useListControls`'a (topbar'sız mod) geçirilebilir. Durum filtreleri
+  > ekran-özel kaldı (farklı sözlükler: kampanya/kişi/etkinlik durumları).
 
 ---
 
