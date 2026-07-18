@@ -10,8 +10,10 @@ const props = withDefaults(
     contact: Contact | null
     /** Attribute fields to render in create mode (from the selected list). */
     schemaFields?: AttributeField[]
+    /** Selected list — a created contact is also added to it (create mode). */
+    listId?: string | null
   }>(),
-  { schemaFields: () => [] },
+  { schemaFields: () => [], listId: null },
 )
 const emit = defineEmits<{ close: []; saved: [] }>()
 
@@ -151,7 +153,11 @@ async function submit() {
     firstName: form.firstName.trim() || undefined,
     lastName: form.lastName.trim() || undefined,
     attributes: buildAttributes(),
-    ...(props.mode === 'edit' ? { status: form.status } : {}),
+    ...(props.mode === 'edit'
+      ? { status: form.status }
+      : props.listId
+        ? { listId: props.listId }
+        : {}),
   }
 
   loading.value = true

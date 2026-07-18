@@ -485,6 +485,7 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
       :mode="formMode"
       :contact="formContact"
       :schema-fields="createSchemaFields"
+      :list-id="formMode === 'create' ? selectedListId : null"
       @close="formOpen = false"
       @saved="onSaved"
     />

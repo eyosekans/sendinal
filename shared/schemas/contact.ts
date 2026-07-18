@@ -8,18 +8,26 @@ export const contactStatusSchema = z.enum([
 ])
 export type ContactStatus = z.infer<typeof contactStatusSchema>
 
-/** Payload accepted when creating a contact (POST /api/contacts). */
-export const createContactSchema = z.object({
+const contactFieldsSchema = z.object({
   // Normalised to lowercase so the UNIQUE(email) constraint dedupes reliably.
   email: z.string().trim().toLowerCase().email(),
   firstName: z.string().trim().min(1).optional(),
   lastName: z.string().trim().min(1).optional(),
   attributes: z.record(z.string(), z.unknown()).default({}),
 })
+
+/**
+ * Payload accepted when creating a contact (POST /api/contacts). With `listId`,
+ * the contact is also added to that list — and an already-existing email is
+ * updated instead of rejected (solo add must not force a CSV import).
+ */
+export const createContactSchema = contactFieldsSchema.extend({
+  listId: z.string().uuid().optional(),
+})
 export type CreateContactInput = z.infer<typeof createContactSchema>
 
 /** Payload accepted when updating a contact (PATCH /api/contacts/:id). */
-export const updateContactSchema = createContactSchema.partial().extend({
+export const updateContactSchema = contactFieldsSchema.partial().extend({
   status: contactStatusSchema.optional(),
 })
 export type UpdateContactInput = z.infer<typeof updateContactSchema>
