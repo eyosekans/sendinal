@@ -2,8 +2,20 @@
 import Papa from 'papaparse'
 import StepBar from './StepBar.vue'
 import type { List, AttributeField } from '~/types/list'
-import type { DuplicateStrategy } from '#shared/schemas'
+import type {
+  DuplicateStrategy,
+  EmailValidation,
+  ValidationPolicy,
+} from '#shared/schemas'
 import { EMAIL_RE } from '#shared/schemas'
+import {
+  VALIDATION_BATCH_SIZE,
+  VALIDATION_CACHE_DAYS,
+  VALIDATION_MAX_PER_IMPORT,
+  VALIDATION_PRICE_PER_ADDRESS,
+  validationOutcome,
+  type ValidationRisk,
+} from '#shared/validation'
 
 const props = defineProps<{
   open: boolean
@@ -39,6 +51,25 @@ const duplicateStrategy = ref<DuplicateStrategy>('update')
 const invalidStrategy = ref<'skip' | 'flag'>('skip')
 
 const existingEmails = ref<Set<string>>(new Set())
+
+/* Amazon SES email validation (SESv2 GetEmailAddressInsights), run on the way
+ * into Review. `validationResults` is keyed by lowercased email; an address
+ * missing from it has no verdict and passes through unjudged.
+ *
+ * Defaults to 'off' deliberately: the API bills $0.01 *per address*, so a
+ * routine 3k-row CSV would silently cost $30. SES Auto Validation already
+ * guards the send path account-wide at $0.01 per 1,000, so this is an opt-in
+ * for lists worth inspecting up front, not a default tax on every import. */
+const validationPolicy = ref<ValidationPolicy>('off')
+const validationResults = ref<Map<string, EmailValidation>>(new Map())
+const validationAvailable = ref(true)
+const validationRan = ref(false)
+const validationDone = ref(0)
+const validationTarget = ref(0)
+const validationCapped = ref(false)
+const validationFailed = ref(0)
+const validationNotice = ref('')
+
 const reviewLoading = ref(false)
 const reviewFilter = ref<'all' | 'new' | 'update' | 'warning' | 'error'>('all')
 
@@ -68,6 +99,8 @@ function reset() {
   duplicateStrategy.value = 'update'
   invalidStrategy.value = 'skip'
   existingEmails.value = new Set()
+  validationPolicy.value = 'off'
+  resetValidation()
   reviewFilter.value = 'all'
   importing.value = false
   processed.value = 0
@@ -75,6 +108,17 @@ function reset() {
   importError.value = ''
   parseError.value = ''
   dragOver.value = false
+}
+
+function resetValidation() {
+  validationResults.value = new Map()
+  validationAvailable.value = true
+  validationRan.value = false
+  validationDone.value = 0
+  validationTarget.value = 0
+  validationCapped.value = false
+  validationFailed.value = 0
+  validationNotice.value = ''
 }
 
 /* ---------- attribute fields (union across all lists) ---------- */
@@ -219,6 +263,9 @@ type Entry = {
   importable: boolean
   category: Category
   issue: string
+  /** SES verdict for this address, if one was obtained. */
+  validation: EmailValidation | null
+  risk: ValidationRisk
 }
 
 function coerce(raw: string, type: AttributeField['type'] | undefined): unknown {
@@ -258,6 +305,8 @@ const entries = computed<Entry[]>(() => {
     let issue = ''
     let importable = true
     let emailUnverified = false
+    let risk: ValidationRisk = 'clean'
+    const validation = validationResults.value.get(email) ?? null
     const valid = EMAIL_RE.test(email)
     if (!email) {
       category = 'error'
@@ -279,12 +328,26 @@ const entries = computed<Entry[]>(() => {
         category = 'skipped'
         issue = 'Duplicate — skipped'
         importable = false
-      } else if (exists) {
-        category = 'update'
-        issue = 'Existing contact'
       } else {
-        category = 'new'
-        issue = ''
+        // SES verdict, if we have one. No verdict → outcome is clean, so an
+        // unvalidated row behaves exactly as it did before this feature.
+        const outcome = validationOutcome(validation, validationPolicy.value)
+        risk = outcome.risk
+        if (!outcome.importable) {
+          category = 'error'
+          issue = outcome.reason
+          importable = false
+        } else if (outcome.unverified) {
+          category = 'warning'
+          issue = `${outcome.reason} — flagged`
+          emailUnverified = true
+        } else if (exists) {
+          category = 'update'
+          issue = outcome.reason || 'Existing contact'
+        } else {
+          category = 'new'
+          issue = outcome.reason
+        }
       }
     }
 
@@ -299,6 +362,8 @@ const entries = computed<Entry[]>(() => {
       importable,
       category,
       issue,
+      validation,
+      risk,
     })
   })
   return out
@@ -309,6 +374,36 @@ const counts = computed(() => {
   for (const e of entries.value) c[e.category]++
   return c
 })
+/**
+ * Upper bound on what validating this file would cost. Counts unique
+ * well-formed addresses (capped), before duplicates are known and before the
+ * server's 90-day cache is consulted — both only reduce the bill, so the figure
+ * shown is a ceiling, never an understatement.
+ */
+const validationCandidateCount = computed(() => {
+  const unique = new Set(
+    entries.value.filter((e) => EMAIL_RE.test(e.email)).map((e) => e.email),
+  )
+  return Math.min(unique.size, VALIDATION_MAX_PER_IMPORT)
+})
+const estimatedValidationCost = computed(() =>
+  (validationCandidateCount.value * VALIDATION_PRICE_PER_ADDRESS).toLocaleString(
+    'en-US',
+    { style: 'currency', currency: 'USD' },
+  ),
+)
+
+const riskCounts = computed(() => {
+  const c = { risky: 0, caution: 0 }
+  for (const e of entries.value) {
+    if (e.category === 'skipped') continue
+    if (e.risk === 'risky') c.risky++
+    else if (e.risk === 'caution') c.caution++
+  }
+  return c
+})
+const validationChecked = computed(() => validationResults.value.size)
+
 const sendable = computed(() => entries.value.filter((e) => e.importable))
 const reviewTotal = computed(
   () => counts.value.new + counts.value.update + counts.value.warning + counts.value.error,
@@ -336,8 +431,72 @@ function toMap() {
 function toConfigure() {
   step.value = 3
 }
+/**
+ * Runs the importable addresses through Amazon SES validation
+ * (POST /api/contacts/validate, batched). Results land in `validationResults`,
+ * which `entries` reads to re-grade every row.
+ *
+ * Never throws: SES being unavailable or erroring mid-batch leaves the rows it
+ * didn't reach unvalidated, and those import exactly as they would with
+ * validation switched off. A verdict we couldn't get is not a reason to block.
+ */
+async function runValidation() {
+  // Only well-formed, non-skipped addresses are worth paying for — a malformed
+  // one is already handled by `invalidStrategy` and would just 400 at SES.
+  const candidates = [
+    ...new Set(
+      entries.value
+        .filter((e) => e.category !== 'skipped' && EMAIL_RE.test(e.email))
+        .map((e) => e.email),
+    ),
+  ]
+
+  validationCapped.value = candidates.length > VALIDATION_MAX_PER_IMPORT
+  const targets = candidates.slice(0, VALIDATION_MAX_PER_IMPORT)
+  validationTarget.value = targets.length
+  validationDone.value = 0
+  if (!targets.length) return
+
+  const collected = new Map<string, EmailValidation>()
+  let failed = 0
+
+  for (let i = 0; i < targets.length; i += VALIDATION_BATCH_SIZE) {
+    const batch = targets.slice(i, i + VALIDATION_BATCH_SIZE)
+    try {
+      const r = await $fetch<{
+        available: boolean
+        results: Record<string, EmailValidation>
+        cached: number
+        validated: number
+        failed: string[]
+      }>('/api/contacts/validate', { method: 'POST', body: { emails: batch } })
+
+      if (!r.available) {
+        validationAvailable.value = false
+        validationNotice.value =
+          'Amazon SES validation is unavailable (check AWS credentials and region). Rows were imported without it.'
+        break
+      }
+      for (const [email, v] of Object.entries(r.results)) collected.set(email, v)
+      failed += r.failed.length
+    } catch (e: unknown) {
+      validationNotice.value =
+        (e as { data?: { statusMessage?: string } })?.data?.statusMessage ||
+        'Address validation stopped early — the remaining rows were not checked.'
+      break
+    } finally {
+      validationDone.value = Math.min(targets.length, i + VALIDATION_BATCH_SIZE)
+    }
+  }
+
+  validationResults.value = collected
+  validationFailed.value = failed
+  validationRan.value = collected.size > 0
+}
+
 async function toReview() {
   reviewLoading.value = true
+  resetValidation()
   try {
     const emails = [
       ...new Set(
@@ -355,6 +514,9 @@ async function toReview() {
     } else {
       existingEmails.value = new Set()
     }
+    // Duplicates are resolved first so we never pay SES for a row that
+    // `duplicateStrategy: 'skip'` is about to discard anyway.
+    if (validationPolicy.value !== 'off') await runValidation()
     reviewFilter.value = 'all'
     step.value = 4
   } catch (e: unknown) {
@@ -364,6 +526,12 @@ async function toReview() {
     reviewLoading.value = false
   }
 }
+
+const validationProgress = computed(() =>
+  validationTarget.value
+    ? `Validating addresses with SES… ${validationDone.value} / ${validationTarget.value}`
+    : 'Checking existing contacts…',
+)
 
 /* ---------- step 5: chunked import ---------- */
 const CHUNK = 200
@@ -387,6 +555,7 @@ async function runImport() {
         ...(e.lastName ? { lastName: e.lastName } : {}),
         attributes: e.attributes,
         emailUnverified: e.emailUnverified,
+        ...(e.validation ? { validation: e.validation } : {}),
       }))
       const r = await $fetch<{
         imported: number
@@ -398,6 +567,7 @@ async function runImport() {
         body: {
           ...(targetListId.value ? { listId: targetListId.value } : {}),
           duplicateStrategy: duplicateStrategy.value,
+          validationPolicy: validationPolicy.value,
           contacts: batch,
         },
       })
@@ -728,6 +898,79 @@ function viewContacts() {
                 </span>
               </label>
             </div>
+
+            <div class="cfg">
+              <div class="cfg__label">Verify addresses with Amazon SES</div>
+              <label
+                class="radio"
+                :class="{ 'radio--on': validationPolicy === 'off' }"
+              >
+                <input
+                  v-model="validationPolicy"
+                  type="radio"
+                  value="off"
+                  class="radio__input"
+                />
+                <span class="radio__dot" />
+                <span>
+                  <span class="radio__title">Don't verify (recommended)</span>
+                  <span class="radio__desc">
+                    SES Auto Validation already screens every address at send
+                    time, for a fraction of the cost.
+                  </span>
+                </span>
+              </label>
+              <label
+                class="radio"
+                :class="{ 'radio--on': validationPolicy === 'flag' }"
+              >
+                <input
+                  v-model="validationPolicy"
+                  type="radio"
+                  value="flag"
+                  class="radio__input"
+                />
+                <span class="radio__dot" />
+                <span>
+                  <span class="radio__title">Check and flag risky addresses</span>
+                  <span class="radio__desc">
+                    Import them, but mark as unverified (excluded from sending)
+                    so you can review them.
+                  </span>
+                </span>
+              </label>
+              <label
+                class="radio"
+                :class="{ 'radio--on': validationPolicy === 'skip' }"
+              >
+                <input
+                  v-model="validationPolicy"
+                  type="radio"
+                  value="skip"
+                  class="radio__input"
+                />
+                <span class="radio__dot" />
+                <span>
+                  <span class="radio__title">Check and skip risky addresses</span>
+                  <span class="radio__desc">
+                    Leave them out of the import entirely.
+                  </span>
+                </span>
+              </label>
+              <div class="cfg__hint">
+                SES checks each address without emailing it — syntax, domain,
+                mailbox existence, plus disposable and role-address signals.
+                <strong>
+                  It costs $0.01 per address, so checking the
+                  {{ validationCandidateCount.toLocaleString() }} addresses in
+                  this file would cost up to {{ estimatedValidationCost }}.
+                </strong>
+                Results are cached for {{ VALIDATION_CACHE_DAYS }} days and
+                re-used, and at most
+                {{ VALIDATION_MAX_PER_IMPORT.toLocaleString() }} addresses are
+                checked per import.
+              </div>
+            </div>
           </template>
 
           <!-- ============ STEP 4 — REVIEW ============ -->
@@ -755,6 +998,33 @@ function viewContacts() {
                 <div class="card__num">{{ counts.error }}</div>
                 <div class="card__lbl">Errors</div>
               </div>
+            </div>
+
+            <div
+              v-if="validationPolicy !== 'off'"
+              class="banner"
+              :class="validationAvailable ? 'banner--info' : 'banner--warn'"
+            >
+              <i
+                :class="
+                  validationAvailable ? 'ph ph-shield-check' : 'ph ph-warning'
+                "
+              />
+              <span v-if="validationNotice">{{ validationNotice }}</span>
+              <span v-else>
+                <strong>SES verified {{ validationChecked }} addresses</strong>
+                — {{ riskCounts.risky }} risky,
+                {{ riskCounts.caution }} worth a look.
+                <template v-if="validationFailed">
+                  {{ validationFailed }} could not be checked and were imported
+                  unverified.
+                </template>
+                <template v-if="validationCapped">
+                  Only the first
+                  {{ VALIDATION_MAX_PER_IMPORT.toLocaleString() }} addresses
+                  were checked.
+                </template>
+              </span>
             </div>
 
             <div v-if="allClean" class="banner banner--ok">
@@ -991,6 +1261,9 @@ function viewContacts() {
             </div>
             <div class="ft__step">Step 3 of 5</div>
             <div class="ft__side ft__side--end">
+              <span v-if="reviewLoading" class="ft__muted">
+                {{ validationProgress }}
+              </span>
               <button
                 type="button"
                 class="btn btn--primary"
@@ -1361,6 +1634,22 @@ function viewContacts() {
 }
 .banner--ok .ph {
   color: var(--success-600);
+}
+.banner--info {
+  background: var(--info-100);
+  border: 1px solid #a9cdf2;
+  color: var(--info-600);
+}
+.banner--info .ph {
+  color: var(--info-600);
+}
+.banner--warn {
+  background: var(--warning-100);
+  border: 1px solid #e8cd8a;
+  color: var(--warning-600);
+}
+.banner--warn .ph {
+  color: var(--warning-600);
 }
 
 .maptable {

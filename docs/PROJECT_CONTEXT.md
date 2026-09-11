@@ -31,10 +31,20 @@ This is an **internal tool**: no public sign-up, no multi-tenancy, no billing lo
 ## External Services
 
 ### Amazon SES
-- Primary email sending engine.
+- Primary email sending engine (SES v1 API, `@aws-sdk/client-ses`).
 - Requires domain verification with DKIM/SPF records.
 - Sending quota: starts at sandbox mode, must request production access.
 - Bounce and complaint notifications are forwarded via SNS.
+- **Email Validation API** (SESv2 `GetEmailAddressInsights`, `@aws-sdk/client-sesv2`):
+  checks an address without emailing it, offered as an opt-in in the CSV import
+  wizard. **$0.01 per address**, so it is off by default; results are cached on
+  the contact for 90 days and capped at 5,000 addresses per import. Needs
+  `ses:GetEmailAddressInsights` + `iam:CreateServiceLinkedRole`; disable
+  entirely with `NUXT_SES_VALIDATION_DISABLED`.
+- **Auto Validation**: enabled account-wide (SES-managed threshold) at $0.01 per
+  *thousand*. Screens every outbound send and reports blocks as
+  `Permanent/EmailValidationSuppressed` bounces, which the pipeline records as
+  `sends.status = 'suppressed'` so they stay out of the bounce rate.
 
 ### AWS SNS + SQS
 - SES publishes bounce and complaint events to an SNS topic.
@@ -61,6 +71,7 @@ This is an **internal tool**: no public sign-up, no multi-tenancy, no billing lo
 - Campaign creation and scheduling
 - Drag-and-drop email editor (Unlayer)
 - Contact list management and CSV import
+- Email address validation at import (Amazon SES `GetEmailAddressInsights`)
 - Segmentation (filter by attributes and activity)
 - Open tracking (1×1 transparent pixel via Nitro route)
 - Click tracking (URL redirect proxy via Nitro route)
@@ -141,6 +152,7 @@ AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
 SES_FROM_EMAIL=            # verified sender address
 SES_FROM_NAME=
+SES_VALIDATION_DISABLED=   # 'true' turns off import-time address validation
 
 # AWS SNS / SQS
 SQS_QUEUE_URL=             # bounce/complaint queue

@@ -1,6 +1,7 @@
 import { serverSupabaseClient } from '#supabase/server'
 import type { Database, Json } from '~~/app/types/database.types'
 import { importContactsSchema } from '#shared/schemas'
+import { validationOutcome } from '#shared/validation'
 
 /**
  * POST /api/contacts/import
@@ -15,6 +16,12 @@ import { importContactsSchema } from '#shared/schemas'
  * Rows flagged `emailUnverified` are stored with `email_unverified = true`
  * (excluded from campaign dispatch until reviewed).
  *
+ * When a row carries an Amazon SES verdict (from POST /api/contacts/validate),
+ * the verdict is stored on the contact and `validationPolicy` is re-applied here
+ * rather than trusted from the client: a risky address is flagged unverified
+ * (`flag`) or dropped (`skip`). Re-deriving it server-side also keeps the stored
+ * `email_unverified` consistent with the Review screen the operator approved.
+ *
  * Returns: { received, imported, updated, skipped, failed, listId }
  */
 export default defineEventHandler(async (event) => {
@@ -28,7 +35,7 @@ export default defineEventHandler(async (event) => {
       data: parsed.error.flatten(),
     })
   }
-  const { listId, duplicateStrategy, contacts } = parsed.data
+  const { listId, duplicateStrategy, validationPolicy, contacts } = parsed.data
 
   const supabase = await serverSupabaseClient<Database>(event)
 
@@ -70,13 +77,30 @@ export default defineEventHandler(async (event) => {
     first_name: c.firstName ?? null,
     last_name: c.lastName ?? null,
     attributes: c.attributes as Json,
-    email_unverified: c.emailUnverified,
+    // Malformed-format flag (client) OR risky-per-SES flag (re-derived here).
+    email_unverified:
+      c.emailUnverified || validationOutcome(c.validation, validationPolicy).unverified,
+    // Only overwrite the stored verdict when this import actually carries one,
+    // so an unvalidated re-import doesn't wipe an earlier result.
+    ...(c.validation
+      ? {
+          email_validation_verdict: c.validation.isValid,
+          email_validation_checks: c.validation.checks as Json,
+          email_validated_at: c.validation.checkedAt,
+        }
+      : {}),
   })
 
   const toInsert: ReturnType<typeof fieldsOf>[] = []
   const toUpdate: { id: string; fields: ReturnType<typeof fieldsOf> }[] = []
   let skipped = 0
   for (const c of rows) {
+    // Defence in depth: the wizard already filters these out, but a `skip`
+    // policy must hold even if a caller posts the row anyway.
+    if (!validationOutcome(c.validation, validationPolicy).importable) {
+      skipped++
+      continue
+    }
     const id = existing.get(c.email)
     if (!id) {
       toInsert.push(fieldsOf(c))

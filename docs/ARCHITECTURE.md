@@ -78,6 +78,11 @@ CREATE TABLE contacts (
   attributes  JSONB DEFAULT '{}',   -- custom fields (e.g. {"company": "Acme"})
   status      TEXT NOT NULL DEFAULT 'active',
                 -- active | unsubscribed | bounced | complained
+  email_unverified BOOLEAN NOT NULL DEFAULT false,
+                -- excluded from dispatch until reviewed
+  email_validation_verdict TEXT,        -- HIGH | MEDIUM | LOW (SES IsValid)
+  email_validation_checks  JSONB NOT NULL DEFAULT '{}',
+  email_validated_at       TIMESTAMPTZ, -- also the validation cache timestamp
   created_at  TIMESTAMPTZ DEFAULT NOW(),
   updated_at  TIMESTAMPTZ DEFAULT NOW()
 );
@@ -203,6 +208,8 @@ GET    /api/campaigns/:id/stats    open/click/bounce stats
 GET    /api/contacts               list contacts (with pagination + filter)
 POST   /api/contacts               create single contact
 POST   /api/contacts/import        CSV bulk import
+POST   /api/contacts/import-check  dry-run: which candidate emails already exist
+POST   /api/contacts/validate      SES address validation for one import batch
 PATCH  /api/contacts/:id           update contact
 DELETE /api/contacts/:id           delete contact
 
@@ -263,6 +270,71 @@ POST   /api/webhooks/ses           SES bounce/complaint events from SQS
    - Updates `sends.status = 'bounced'` or `'complained'`.
    - Updates `contacts.status = 'bounced'` or `'complained'` (prevents future sends).
    - Inserts a row in `email_events`.
+
+---
+
+## Email Validation Flow (CSV import)
+
+Amazon SES validates an address without sending to it — SESv2
+`GetEmailAddressInsights` returns a HIGH/MEDIUM/LOW confidence for an overall
+`IsValid` rollup plus six checks (syntax, DNS/MX, mailbox existence, role
+address, disposable domain, random-string pattern).
+
+1. In the import wizard's **Configure** step the operator picks a policy:
+   `off` (**default** — don't call SES), `flag` (import risky addresses but mark
+   them `email_unverified`), or `skip` (leave them out). Off is the default
+   because the API bills **$0.01 per address** while account-wide Auto Validation
+   (below) already screens the send path at $0.01 per *thousand*; the wizard
+   shows the running cost of the loaded file before the operator opts in.
+2. Moving to **Review** first resolves duplicates via `/api/contacts/import-check`
+   — so a row that `duplicateStrategy: 'skip'` is about to discard is never paid
+   for — then posts the remaining addresses to `/api/contacts/validate` in
+   batches of 500.
+3. That route serves the batch from the DB first: a contact whose
+   `email_validated_at` is younger than 90 days re-uses its stored verdict
+   instead of buying a new one. Fresh verdicts are written back onto contacts
+   that already exist.
+4. `shared/validation.ts#validationOutcome` grades each verdict
+   (`clean` | `caution` | `risky`) and applies the policy. The wizard uses it to
+   colour the Review table; `/api/contacts/import` calls the same function to
+   re-derive `email_unverified` server-side rather than trusting the client.
+5. Validated rows are stored with their verdict, so a flagged contact carries the
+   reason it was flagged.
+
+**Failure is never fatal.** No AWS credentials, `NUXT_SES_VALIDATION_DISABLED`,
+an unsupported region, or SES throttling past its retries all resolve to "no
+verdict", and a row with no verdict imports exactly as it would with validation
+switched off. At most 5,000 addresses are validated per import
+(`VALIDATION_MAX_PER_IMPORT`); the wizard says so when a file exceeds it.
+
+Sending runs on SES v1 (`@aws-sdk/client-ses`), which has no insights operation,
+so validation uses a separate SESv2 client (`server/utils/sesValidation.ts`).
+IAM needs `ses:GetEmailAddressInsights` and `iam:CreateServiceLinkedRole`.
+
+### Auto Validation (account-level, already enabled)
+
+Separately from the import-time API, SES **Auto Validation** is enabled
+account-wide in eu-central-1 with the SES-managed threshold
+(`sesv2 get-account` → `SuppressionAttributes.ValidationAttributes`; change it
+with `put-account-suppression-attributes`, which confusingly takes the field as
+`ValidationOptions`). It screens every outbound recipient and blocks the ones
+below the threshold.
+
+A blocked recipient comes back through the normal bounce pipeline as
+`bounceType=Permanent`, `bounceSubType=EmailValidationSuppressed`. That is a
+prediction, not a mailbox rejection, so both bounce handlers special-case it:
+
+- `sends.status = 'suppressed'` (not `'bounced'`), which keeps it out of the
+  rolling bounce rate — matching SES, which excludes account-suppression-list
+  sends from `Reputation.BounceRate`. Without this, our own dashboard would read
+  worse than the number AWS judges the account on, and the 2% auto-pause guard
+  in `shared/reputation.ts` could halt campaigns over phantom bounces.
+- The contact is flagged `email_unverified` rather than `status='bounced'`:
+  dispatch already skips unverified contacts, but the address stays reviewable
+  instead of being written off as a dead mailbox.
+
+Suppressed sends still consume send quota and are still billed the normal
+message fee.
 
 ---
 

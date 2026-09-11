@@ -56,6 +56,59 @@ export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export const duplicateStrategySchema = z.enum(['update', 'skip'])
 export type DuplicateStrategy = z.infer<typeof duplicateStrategySchema>
 
+/* ---------------------------------------------------------------------------
+ * Amazon SES email validation (SESv2 `GetEmailAddressInsights`)
+ * ------------------------------------------------------------------------- */
+
+/** SES answers every check with a confidence level, never a boolean. */
+export const validationVerdictSchema = z.enum(['HIGH', 'MEDIUM', 'LOW'])
+export type ValidationVerdict = z.infer<typeof validationVerdictSchema>
+
+/**
+ * The six checks `GetEmailAddressInsights` performs, camelCased from the API's
+ * `MailboxValidation.Evaluations`. All optional — SES omits a check it could
+ * not run (e.g. no DNS answer for the domain).
+ */
+export const emailValidationChecksSchema = z
+  .object({
+    hasValidSyntax: validationVerdictSchema,
+    hasValidDnsRecords: validationVerdictSchema,
+    mailboxExists: validationVerdictSchema,
+    isRoleAddress: validationVerdictSchema,
+    isDisposable: validationVerdictSchema,
+    isRandomInput: validationVerdictSchema,
+  })
+  .partial()
+export type EmailValidationChecks = z.infer<typeof emailValidationChecksSchema>
+
+/** One address's validation result, as stored on `contacts` and echoed to the UI. */
+export const emailValidationSchema = z.object({
+  /** `MailboxValidation.IsValid` — the overall delivery-likelihood rollup. */
+  isValid: validationVerdictSchema,
+  checks: emailValidationChecksSchema.default({}),
+  /** When SES produced this result (ISO 8601); drives cache expiry. */
+  checkedAt: z.string().datetime(),
+})
+export type EmailValidation = z.infer<typeof emailValidationSchema>
+
+/**
+ * What the import should do with an address SES flags as risky.
+ *   off  — don't call SES at all
+ *   flag — import it, but mark `email_unverified` (excluded from sending)
+ *   skip — leave it out of the import entirely
+ */
+export const validationPolicySchema = z.enum(['off', 'flag', 'skip'])
+export type ValidationPolicy = z.infer<typeof validationPolicySchema>
+
+/** Body for POST /api/contacts/validate — one wizard batch of addresses. */
+export const validateEmailsSchema = z.object({
+  emails: z
+    .array(z.string().trim().toLowerCase().min(1).max(320))
+    .min(1)
+    .max(500),
+})
+export type ValidateEmailsInput = z.infer<typeof validateEmailsSchema>
+
 /**
  * One row in a bulk import. Email is normally format-validated, but a row may
  * carry `emailUnverified: true` (the wizard's "import anyway and flag" option),
@@ -68,6 +121,13 @@ export const importContactSchema = z
     lastName: z.string().trim().min(1).optional(),
     attributes: z.record(z.string(), z.unknown()).default({}),
     emailUnverified: z.boolean().default(false),
+    /**
+     * SES verdict for this address, as returned by POST /api/contacts/validate.
+     * Absent when validation was off, unavailable, or skipped for this row.
+     * The server re-derives the flag/skip decision from it — it never trusts
+     * `emailUnverified` alone to represent a validation outcome.
+     */
+    validation: emailValidationSchema.optional(),
   })
   .superRefine((c, ctx) => {
     if (!c.emailUnverified && !EMAIL_RE.test(c.email)) {
@@ -89,6 +149,7 @@ export type ImportContactInput = z.infer<typeof importContactSchema>
 export const importContactsSchema = z.object({
   listId: z.string().uuid().optional(),
   duplicateStrategy: duplicateStrategySchema.default('update'),
+  validationPolicy: validationPolicySchema.default('off'),
   contacts: z.array(importContactSchema).min(1).max(10000),
 })
 export type ImportContactsInput = z.infer<typeof importContactsSchema>
