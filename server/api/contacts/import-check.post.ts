@@ -26,13 +26,20 @@ export default defineEventHandler(async (event) => {
   const emails = [...new Set(parsed.data.emails)]
 
   const supabase = await serverSupabaseClient<Database>(event)
-  const { data, error } = await supabase
-    .from('contacts')
-    .select('email')
-    .in('email', emails)
-  if (error) {
-    throw createError({ statusCode: 500, statusMessage: error.message })
+
+  // The payload allows up to 10 000 emails, far more than one `.in()` can carry
+  // in the request URL, so the lookup runs in chunks (see server/utils/inChunks).
+  const existing: string[] = []
+  for (const batch of chunked(emails)) {
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('email')
+      .in('email', batch)
+    if (error) {
+      throw createError({ statusCode: 500, statusMessage: error.message })
+    }
+    for (const r of data ?? []) existing.push(r.email)
   }
 
-  return { existing: (data ?? []).map((r) => r.email) }
+  return { existing }
 })

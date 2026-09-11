@@ -39,11 +39,15 @@ export default defineEventHandler(async (event) => {
   const memberIds = (members ?? []).map((m) => m.contact_id)
   if (memberIds.length === 0) return { count: 0, total: 0 }
 
-  // Same sendability filter as campaign-dispatch.
+  // Same sendability filter as campaign-dispatch, and the same join-based
+  // membership filter — `.in('id', memberIds)` would overflow the request URL
+  // on a large list.
   const { data: contacts, error: cErr } = await supabase
     .from('contacts')
-    .select('email, first_name, last_name, status, attributes')
-    .in('id', memberIds)
+    .select(
+      'email, first_name, last_name, status, attributes, list_contacts!inner(list_id)',
+    )
+    .eq('list_contacts.list_id', listId)
     .eq('status', 'active')
     .eq('email_unverified', false)
     .is('deleted_at', null)

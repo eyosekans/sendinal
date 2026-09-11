@@ -26,10 +26,11 @@ export default defineEventHandler(async (event) => {
 
   if (!sendIds.length) return { links: [] }
 
+  // Join-filtered: an `.in()` over every send id overflows the request URL.
   const { data: clicks, error: eErr } = await supabase
     .from('email_events')
-    .select('send_id, url')
-    .in('send_id', sendIds)
+    .select('send_id, url, sends!inner(campaign_id)')
+    .eq('sends.campaign_id', id)
     .eq('type', 'clicked')
   if (eErr) throw createError({ statusCode: 500, statusMessage: eErr.message })
 

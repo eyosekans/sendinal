@@ -85,12 +85,16 @@ export default defineEventHandler(async (event) => {
       recipients.set(s.campaign_id, (recipients.get(s.campaign_id) ?? 0) + 1)
     }
 
-    const sendIds = [...sendToCampaign.keys()]
-    if (sendIds.length) {
+    // Filter through the sends join rather than listing every send id: PostgREST
+    // serialises `.in()` into the query string, and one page of campaigns can
+    // easily hold thousands of sends — enough to blow the URL length limit and
+    // fail the whole request with a bare "Bad Request". Only the campaign ids
+    // travel in the URL here, so this scales with page size, not send volume.
+    if (sendToCampaign.size) {
       const { data: events, error: eErr } = await supabase
         .from('email_events')
-        .select('send_id, type')
-        .in('send_id', sendIds)
+        .select('send_id, type, sends!inner(campaign_id)')
+        .in('sends.campaign_id', ids)
         .in('type', ['opened', 'clicked'])
       if (eErr) {
         throw createError({ statusCode: 500, statusMessage: eErr.message })

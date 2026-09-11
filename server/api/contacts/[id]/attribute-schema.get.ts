@@ -21,24 +21,18 @@ export default defineEventHandler(async (event) => {
 
   const supabase = await serverSupabaseClient<Database>(event)
 
-  const { data: memberships, error: mErr } = await supabase
-    .from('list_contacts')
-    .select('list_id')
-    .eq('contact_id', id)
-  if (mErr) {
-    throw createError({ statusCode: 500, statusMessage: mErr.message })
-  }
-
-  const listIds = (memberships ?? []).map((m) => m.list_id)
-  if (listIds.length === 0) return { fields: [] as AttributeField[] }
-
+  // One join instead of resolving list ids and feeding them back through
+  // `.in('id', …)` — same pattern as the other membership queries. Bounded by
+  // the number of lists rather than by contacts, so it was never at real risk
+  // of overflowing the URL, but it keeps the codebase to a single idiom.
   const { data: lists, error: lErr } = await supabase
     .from('lists')
-    .select('attribute_schema')
-    .in('id', listIds)
+    .select('attribute_schema, list_contacts!inner(contact_id)')
+    .eq('list_contacts.contact_id', id)
   if (lErr) {
     throw createError({ statusCode: 500, statusMessage: lErr.message })
   }
+  if (!lists?.length) return { fields: [] as AttributeField[] }
 
   const fields: AttributeField[] = []
   const seen = new Set<string>()

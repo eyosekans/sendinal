@@ -57,10 +57,15 @@ export async function processCampaignDispatch(job: Job) {
     return
   }
 
+  // Membership is filtered through the join, NOT `.in('id', memberIds)`:
+  // PostgREST puts that id list in the query string, so a large list would
+  // overflow the URL and fail the dispatch — i.e. silently stop a send.
   const { data: sendable, error: ctErr } = await supabase
     .from('contacts')
-    .select('id, email, first_name, last_name, status, attributes')
-    .in('id', memberIds)
+    .select(
+      'id, email, first_name, last_name, status, attributes, list_contacts!inner(list_id)',
+    )
+    .eq('list_contacts.list_id', campaign.list_id)
     .eq('status', 'active')
     .eq('email_unverified', false)
     .is('deleted_at', null)

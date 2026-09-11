@@ -40,10 +40,11 @@ export default defineEventHandler(async (event) => {
   let firstEventDay: string | null = null
 
   if (sendIds.length) {
+    // Join-filtered: an `.in()` over every send id overflows the request URL.
     const { data: events, error: eErr } = await supabase
       .from('email_events')
-      .select('type, occurred_at')
-      .in('send_id', sendIds)
+      .select('type, occurred_at, sends!inner(campaign_id)')
+      .eq('sends.campaign_id', id)
       .in('type', ['opened', 'clicked'])
     if (eErr) throw createError({ statusCode: 500, statusMessage: eErr.message })
 
