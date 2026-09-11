@@ -245,6 +245,7 @@ const ACT: Record<string, { label: string; bg: string; fg: string; bd: string }>
     unsubscribed: { label: 'Unsubscribed', bg: '#f0eeeb', fg: '#787068', bd: '#e2ded9' },
     bounced: { label: 'Bounced', bg: '#fdf0e8', fg: '#984a14', bd: '#f5c4a0' },
     complained: { label: 'Complained', bg: '#fde8e8', fg: '#c0272d', bd: '#f5a3a3' },
+    suppressed: { label: 'Suppressed', bg: '#fef3d0', fg: '#92620a', bd: '#e8cd8a' },
     failed: { label: 'Failed', bg: '#fde8e8', fg: '#c0272d', bd: '#f5a3a3' },
     queued: { label: 'Queued', bg: '#e3f0fd', fg: '#1a5fa8', bd: '#93c4f7' },
   }

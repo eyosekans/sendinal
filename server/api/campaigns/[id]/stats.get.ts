@@ -51,6 +51,7 @@ export default defineEventHandler(async (event) => {
     failed: 0,
     bounced: 0,
     complained: 0,
+    suppressed: 0,
   }
   for (const s of sends) counts[s.status]++
   const recipients = sends.length
@@ -59,12 +60,13 @@ export default defineEventHandler(async (event) => {
   const openedSends = new Set<string>()
   const clickedSends = new Set<string>()
   const unsubscribedSends = new Set<string>()
-  const sendIds = sends.map((s) => s.id)
-  if (sendIds.length) {
+  if (sends.length) {
+    // Filtered through the sends join, not an `.in()` over every send id — that
+    // list goes into the URL and overflows it on a large campaign.
     const { data: events, error: eErr } = await supabase
       .from('email_events')
-      .select('send_id, type')
-      .in('send_id', sendIds)
+      .select('send_id, type, sends!inner(campaign_id)')
+      .eq('sends.campaign_id', id)
       .in('type', ['opened', 'clicked', 'unsubscribed'])
     if (eErr) {
       throw createError({ statusCode: 500, statusMessage: eErr.message })

@@ -37,7 +37,7 @@ export type SesEventResult =
   | { handled: false; reason: string }
   | {
       handled: true
-      type: 'bounced' | 'complained'
+      type: 'bounced' | 'complained' | 'suppressed'
       sendId: string
       deduped: boolean
     }
@@ -77,8 +77,20 @@ export async function processSesNotification(
     }
   }
 
-  const newStatus: 'bounced' | 'complained' =
-    kind === 'bounce' ? 'bounced' : 'complained'
+  // SES Auto Validation blocked the send before any mailbox saw it. It arrives
+  // as a Permanent bounce, but it is a prediction, not a rejection — so it gets
+  // its own status rather than condemning the address (see the migration
+  // 20260911000002 note, and shouldFlagContact below).
+  const isValidationSuppression =
+    kind === 'bounce' &&
+    n.bounce?.bounceSubType === 'EmailValidationSuppressed'
+
+  const newStatus: 'bounced' | 'complained' | 'suppressed' =
+    kind === 'complaint'
+      ? 'complained'
+      : isValidationSuppression
+        ? 'suppressed'
+        : 'bounced'
 
   // The SES messageId maps 1:1 to a send (one email per recipient).
   const { data: send, error: sErr } = await supabase
@@ -105,10 +117,17 @@ export async function processSesNotification(
     .eq('id', send.id)
   if (upSendErr) throw upSendErr
 
-  // 2) Suppress the contact so future campaigns skip it.
+  // 2) Keep the contact out of future campaigns. A real bounce/complaint is
+  //    terminal (`status`); an Auto Validation suppression only flags the
+  //    address as unverified — dispatch already skips those, but it stays
+  //    reviewable and can be restored once corrected.
   const { error: upContactErr } = await supabase
     .from('contacts')
-    .update({ status: newStatus })
+    .update(
+      isValidationSuppression
+        ? { email_unverified: true }
+        : { status: newStatus as 'bounced' | 'complained' },
+    )
     .eq('id', send.contact_id)
   if (upContactErr) throw upContactErr
 

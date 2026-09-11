@@ -28,15 +28,25 @@ export type CampaignStatus =
   | 'cancelled'
   | 'failed'
   | 'paused'
-export type SendStatus = 'queued' | 'sent' | 'failed' | 'bounced' | 'complained'
+export type SendStatus =
+  | 'queued'
+  | 'sent'
+  | 'failed'
+  | 'bounced'
+  | 'complained'
+  /** SES Auto Validation declined to attempt delivery — not a mailbox bounce. */
+  | 'suppressed'
 export type EmailEventType =
   | 'opened'
   | 'clicked'
   | 'bounced'
   | 'complained'
   | 'unsubscribed'
+  | 'suppressed'
 export type TrackingTokenType = 'open' | 'click' | 'unsubscribe'
 export type NotificationSeverity = 'info' | 'warning' | 'critical'
+/** SES `GetEmailAddressInsights` confidence level (see shared/schemas/contact). */
+export type ValidationVerdict = 'HIGH' | 'MEDIUM' | 'LOW'
 
 export interface Database {
   public: {
@@ -50,6 +60,9 @@ export interface Database {
           attributes: Json
           status: ContactStatus
           email_unverified: boolean
+          email_validation_verdict: ValidationVerdict | null
+          email_validation_checks: Json
+          email_validated_at: string | null
           created_at: string
           updated_at: string
           deleted_at: string | null
@@ -62,6 +75,9 @@ export interface Database {
           attributes?: Json
           status?: ContactStatus
           email_unverified?: boolean
+          email_validation_verdict?: ValidationVerdict | null
+          email_validation_checks?: Json
+          email_validated_at?: string | null
           created_at?: string
           updated_at?: string
           deleted_at?: string | null
@@ -74,6 +90,9 @@ export interface Database {
           attributes?: Json
           status?: ContactStatus
           email_unverified?: boolean
+          email_validation_verdict?: ValidationVerdict | null
+          email_validation_checks?: Json
+          email_validated_at?: string | null
           created_at?: string
           updated_at?: string
           deleted_at?: string | null

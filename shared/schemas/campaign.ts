@@ -75,6 +75,7 @@ export const ACTIVITY_STATUSES = [
   'unsubscribed',
   'bounced',
   'complained',
+  'suppressed',
   'failed',
   'queued',
 ] as const
