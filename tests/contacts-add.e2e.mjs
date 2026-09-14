@@ -125,10 +125,14 @@ const EMAILS = [
   'e2e-multi-2@example.com',
   'e2e-multi-3@example.com',
 ]
+const RESTORED_UNSUB_EMAIL = 'e2e-solo-restored-unsub@example.com'
 const LIST_NAME = 'e2e-solo-add-list'
 
 async function cleanup() {
-  await admin.from('contacts').delete().in('email', EMAILS)
+  await admin
+    .from('contacts')
+    .delete()
+    .in('email', [...EMAILS, RESTORED_UNSUB_EMAIL])
   await admin.from('lists').delete().eq('name', LIST_NAME)
 }
 
@@ -249,6 +253,23 @@ let listId
     .eq('list_id', listId)
     .eq('contact_id', r.json?.id)
   check('restored contact joined list', m?.length === 1, m)
+}
+{
+  // Compliance: deleting and re-adding an unsubscribed contact must not make
+  // them sendable again — the restore keeps their status.
+  const seed = await api('POST', '/api/contacts', { email: RESTORED_UNSUB_EMAIL })
+  await admin
+    .from('contacts')
+    .update({ status: 'unsubscribed' })
+    .eq('id', seed.json?.id)
+  await api('DELETE', `/api/contacts/${seed.json?.id}`)
+  const r = await api('POST', '/api/contacts', { email: RESTORED_UNSUB_EMAIL, listId })
+  check('soft-deleted unsubscribed restored → 200', r.status === 200, r)
+  check(
+    'restored contact stays unsubscribed',
+    r.json?.status === 'unsubscribed' && r.json?.deleted_at === null,
+    r.json,
+  )
 }
 {
   const r = await api('POST', '/api/contacts', {
