@@ -138,6 +138,7 @@ export async function processCampaignDispatch(job: Job) {
   // public APP_URL for absolute links; without it we send plain HTML.
   const appUrl = (process.env.NUXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
   const htmlBySend = new Map<string, string>()
+  const unsubUrlBySend = new Map<string, string>()
   type TokenRow = {
     token: string
     send_id: string
@@ -163,7 +164,9 @@ export async function processCampaignDispatch(job: Job) {
       // 2.5 — unsubscribe link (after click rewrite so it isn't /t/c-wrapped).
       const unsubToken = generateToken()
       tokenRows.push({ token: unsubToken, send_id: s.id, type: 'unsubscribe' })
-      const withUnsub = injectUnsubscribe(clicked, `${appUrl}/t/u/${unsubToken}`)
+      const unsubUrl = `${appUrl}/t/u/${unsubToken}`
+      unsubUrlBySend.set(s.id, unsubUrl)
+      const withUnsub = injectUnsubscribe(clicked, unsubUrl)
       // 2.3 — inject the open pixel last.
       const openToken = generateToken()
       tokenRows.push({ token: openToken, send_id: s.id, type: 'open' })
@@ -192,6 +195,7 @@ export async function processCampaignDispatch(job: Job) {
         html,
         fromName: campaign.from_name,
         fromEmail: campaign.from_email,
+        unsubscribeUrl: unsubUrlBySend.get(s.id),
       }
       return {
         name: 'send',

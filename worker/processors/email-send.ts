@@ -42,6 +42,7 @@ export async function processEmailSend(job: Job) {
     html: data.html,
     fromName: data.fromName,
     fromEmail: data.fromEmail,
+    unsubscribeUrl: data.unsubscribeUrl,
   })
 
   await supabase

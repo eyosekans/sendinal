@@ -27,8 +27,8 @@ import { VALIDATION_CONCURRENCY } from '#shared/validation'
  *     for this address" rather than an error. An import that can't be validated
  *     still has to run.
  *
- * Sending runs on SES v1 (`@aws-sdk/client-ses`, see worker/lib/ses.ts) which
- * has no insights operation, hence the separate SESv2 client here.
+ * The worker's sending client (worker/lib/ses.ts) lives in a separate process,
+ * hence this server-side SESv2 client of its own.
  *
  * IAM: the calling identity needs `ses:GetEmailAddressInsights` (and
  * `iam:CreateServiceLinkedRole` for SES's CloudWatch validation metrics).
