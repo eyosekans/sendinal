@@ -6,10 +6,20 @@ import { activityStatusSchema } from '#shared/schemas'
 /**
  * GET /api/campaigns/:id/activity?page=&limit=&search=&status=
  * Paginated "individual send results": one row per recipient with their derived
- * engagement status (clicked > opened > unsubscribed > the send's delivery
- * status) and the time of the latest signal. `search` matches the recipient's
+ * status and the time of the latest signal. `search` matches the recipient's
  * email or name; `status` filters on the derived status, so `total` always
  * reflects the filtered set and stays consistent with pagination.
+ *
+ * Each recipient gets exactly one status, highest first:
+ *
+ *   unsubscribed > complained > clicked > opened > the send's delivery status
+ *
+ * Terminal outcomes outrank engagement. Opening or clicking almost always
+ * precedes an unsubscribe (the link sits in the email, and security scanners
+ * fetch every link at once), so ranking engagement first hid every unsubscribe
+ * behind `clicked`/`opened` and the Unsubscribed filter always came back empty.
+ * With this order the Unsubscribed filter equals the stats endpoint's
+ * `counts.unsubscribed` (distinct sends with an `unsubscribed` event).
  *
  * The derived status lives across two tables, so filtering loads the campaign's
  * sends + events and derives in-app — same trade-off as the stats endpoint
@@ -81,13 +91,15 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // Precedence documented at the top of the file.
   const statusFor = (s: (typeof sends)[number]): string => {
     const sig = signal.get(s.id)
+    if (sig?.unsub) return 'unsubscribed'
+    if (s.status === 'complained') return 'complained'
     if (sig?.clicked) return 'clicked'
     if (sig?.opened) return 'opened'
-    if (sig?.unsub) return 'unsubscribed'
     if (s.status === 'sent') return 'delivered'
-    return s.status // bounced | complained | failed | queued
+    return s.status // bounced | suppressed | failed | queued
   }
 
   const q = search?.toLowerCase()
