@@ -40,25 +40,33 @@ export default defineEventHandler(async (event) => {
   const supabase = await serverSupabaseClient<Database>(event)
 
   // All sends for the campaign with their recipient embedded (avoids an
-  // unbounded `.in(contact_id, …)` URL when searching).
-  const { data: sends, error: sErr } = await supabase
-    .from('sends')
-    .select(
-      'id, contact_id, status, sent_at, created_at, contacts(email, first_name, last_name)',
-    )
-    .eq('campaign_id', id)
-  if (sErr) throw createError({ statusCode: 500, statusMessage: sErr.message })
+  // unbounded `.in(contact_id, …)` URL when searching). Both reads are paged:
+  // a single select stops at 1000 rows, which silently dropped events (and so
+  // statuses) on any campaign with more than a thousand of them.
+  const sends = await fetchAllRows((from, to) =>
+    supabase
+      .from('sends')
+      .select(
+        'id, contact_id, status, sent_at, created_at, contacts(email, first_name, last_name)',
+      )
+      .eq('campaign_id', id)
+      .order('id')
+      .range(from, to),
+  )
 
   // All engagement events for the campaign (filtered via the sends join).
   const signal = new Map<string, { clicked: boolean; opened: boolean; unsub: boolean }>()
   const latest = new Map<string, string>()
-  if (sends?.length) {
-    const { data: events, error: eErr } = await supabase
-      .from('email_events')
-      .select('send_id, type, occurred_at, sends!inner(campaign_id)')
-      .eq('sends.campaign_id', id)
-    if (eErr) throw createError({ statusCode: 500, statusMessage: eErr.message })
-    for (const e of events ?? []) {
+  if (sends.length) {
+    const events = await fetchAllRows((from, to) =>
+      supabase
+        .from('email_events')
+        .select('send_id, type, occurred_at, sends!inner(campaign_id)')
+        .eq('sends.campaign_id', id)
+        .order('id')
+        .range(from, to),
+    )
+    for (const e of events) {
       const sig = signal.get(e.send_id) ?? {
         clicked: false,
         opened: false,
@@ -73,7 +81,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const statusFor = (s: NonNullable<typeof sends>[number]): string => {
+  const statusFor = (s: (typeof sends)[number]): string => {
     const sig = signal.get(s.id)
     if (sig?.clicked) return 'clicked'
     if (sig?.opened) return 'opened'
@@ -83,7 +91,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const q = search?.toLowerCase()
-  const matchesSearch = (c: NonNullable<typeof sends>[number]['contacts']) => {
+  const matchesSearch = (c: (typeof sends)[number]['contacts']) => {
     if (!q) return true
     if (!c) return false
     return (
@@ -93,7 +101,7 @@ export default defineEventHandler(async (event) => {
     )
   }
 
-  const filtered = (sends ?? [])
+  const filtered = sends
     .map((s) => ({
       sendId: s.id,
       email: s.contacts?.email ?? '—',

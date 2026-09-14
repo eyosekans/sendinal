@@ -17,26 +17,22 @@ export default defineEventHandler(async (event) => {
 
   const supabase = await serverSupabaseClient<Database>(event)
 
-  const { data: sendRows, error: sErr } = await supabase
-    .from('sends')
-    .select('id')
-    .eq('campaign_id', id)
-  if (sErr) throw createError({ statusCode: 500, statusMessage: sErr.message })
-  const sendIds = (sendRows ?? []).map((s) => s.id)
-
-  if (!sendIds.length) return { links: [] }
-
   // Join-filtered: an `.in()` over every send id overflows the request URL.
-  const { data: clicks, error: eErr } = await supabase
-    .from('email_events')
-    .select('send_id, url, sends!inner(campaign_id)')
-    .eq('sends.campaign_id', id)
-    .eq('type', 'clicked')
-  if (eErr) throw createError({ statusCode: 500, statusMessage: eErr.message })
+  // Paged: a single select stops at 1000 rows, so a busy campaign's top links
+  // were ranked and counted from whichever thousand clicks came back first.
+  const clicks = await fetchAllRows((from, to) =>
+    supabase
+      .from('email_events')
+      .select('id, send_id, url, sends!inner(campaign_id)')
+      .eq('sends.campaign_id', id)
+      .eq('type', 'clicked')
+      .order('id')
+      .range(from, to),
+  )
 
   const totals = new Map<string, number>()
   const uniques = new Map<string, Set<string>>()
-  for (const c of clicks ?? []) {
+  for (const c of clicks) {
     if (!c.url) continue
     totals.set(c.url, (totals.get(c.url) ?? 0) + 1)
     if (!uniques.has(c.url)) uniques.set(c.url, new Set())

@@ -13,6 +13,9 @@ import type { Database } from '~~/app/types/database.types'
  *
  *   { count, total } — `total` sendable list members, `count` after the segment.
  */
+/** Rows per page; must not exceed PostgREST's max-rows (1000). */
+const PAGE_SIZE = 1000
+
 export default defineEventHandler(async (event) => {
   await requireUser(event)
 
@@ -28,34 +31,30 @@ export default defineEventHandler(async (event) => {
 
   const supabase = await serverSupabaseClient<Database>(event)
 
-  // Resolve list members.
-  const { data: members, error: mErr } = await supabase
-    .from('list_contacts')
-    .select('contact_id')
-    .eq('list_id', listId)
-  if (mErr) {
-    throw createError({ statusCode: 500, statusMessage: mErr.message })
-  }
-  const memberIds = (members ?? []).map((m) => m.contact_id)
-  if (memberIds.length === 0) return { count: 0, total: 0 }
-
   // Same sendability filter as campaign-dispatch, and the same join-based
   // membership filter — `.in('id', memberIds)` would overflow the request URL
-  // on a large list.
-  const { data: contacts, error: cErr } = await supabase
-    .from('contacts')
-    .select(
-      'email, first_name, last_name, status, attributes, list_contacts!inner(list_id)',
-    )
-    .eq('list_contacts.list_id', listId)
-    .eq('status', 'active')
-    .eq('email_unverified', false)
-    .is('deleted_at', null)
-  if (cErr) {
-    throw createError({ statusCode: 500, statusMessage: cErr.message })
+  // on a large list. Paged like dispatch too: one select stops at PostgREST's
+  // max-rows (1000), so the estimate would cap there while the send doesn't.
+  const rows: EvaluableContact[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error: cErr } = await supabase
+      .from('contacts')
+      .select(
+        'email, first_name, last_name, status, attributes, list_contacts!inner(list_id)',
+      )
+      .eq('list_contacts.list_id', listId)
+      .eq('status', 'active')
+      .eq('email_unverified', false)
+      .is('deleted_at', null)
+      .order('id')
+      .range(from, from + PAGE_SIZE - 1)
+    if (cErr) {
+      throw createError({ statusCode: 500, statusMessage: cErr.message })
+    }
+    rows.push(...(data as EvaluableContact[]))
+    if (data.length < PAGE_SIZE) break
   }
 
-  const rows = (contacts ?? []) as EvaluableContact[]
   const count = rows.filter((c) => matchesSegmentRules(c, rules.rules)).length
   return { count, total: rows.length }
 })

@@ -35,10 +35,16 @@ export default defineEventHandler(async (event) => {
     base === 0 ? null : Number(((n / base) * 100).toFixed(1))
 
   // --- sends: status + sent_at (one pass for sent total, health, time series) ---
-  const { data: sends, error: sErr } = await supabase
-    .from('sends')
-    .select('status, sent_at')
-  if (sErr) throw createError({ statusCode: 500, statusMessage: sErr.message })
+  // Every read over sends/events is paged: a single select stops at 1000 rows,
+  // which froze Total Sent, the health panel and both rates at the first
+  // thousand rows once the workspace grew past them.
+  const sends = await fetchAllRows((from, to) =>
+    supabase
+      .from('sends')
+      .select('id, status, sent_at')
+      .order('id')
+      .range(from, to),
+  )
 
   let delivered = 0
   let bounced = 0
@@ -52,7 +58,7 @@ export default defineEventHandler(async (event) => {
   let complained7 = 0
   const dailyDelivered = new Map<string, number>()
 
-  for (const s of sends ?? []) {
+  for (const s of sends) {
     if (s.status === 'sent') delivered++
     else if (s.status === 'bounced') bounced++
     else if (s.status === 'complained') complained++
@@ -91,15 +97,18 @@ export default defineEventHandler(async (event) => {
   }
 
   // --- unique opens / clicks across all events ---
-  const { data: events, error: eErr } = await supabase
-    .from('email_events')
-    .select('send_id, type')
-    .in('type', ['opened', 'clicked'])
-  if (eErr) throw createError({ statusCode: 500, statusMessage: eErr.message })
+  const events = await fetchAllRows((from, to) =>
+    supabase
+      .from('email_events')
+      .select('id, send_id, type')
+      .in('type', ['opened', 'clicked'])
+      .order('id')
+      .range(from, to),
+  )
 
   const openedSends = new Set<string>()
   const clickedSends = new Set<string>()
-  for (const e of events ?? []) {
+  for (const e of events) {
     ;(e.type === 'opened' ? openedSends : clickedSends).add(e.send_id)
   }
 
