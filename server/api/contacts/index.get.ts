@@ -4,7 +4,8 @@ import { listContactsQuerySchema } from '#shared/schemas'
 
 /**
  * GET /api/contacts
- * Paginated contact list with optional email search, status filter, and list
+ * Paginated contact list with optional search (email, first or last name),
+ * status filter, and list
  * membership filter (`listId`). Soft-deleted contacts are hidden unless
  * `includeDeleted=true`.
  *
@@ -39,7 +40,8 @@ export default defineEventHandler(async (event) => {
 
   if (!includeDeleted) query = query.is('deleted_at', null)
   if (status) query = query.eq('status', status)
-  if (search) query = query.ilike('email', `%${search}%`)
+  if (search)
+    query = query.or(containsAnyFilter(CONTACT_SEARCH_COLUMNS, search))
 
   const from = (page - 1) * limit
   query = query

@@ -11,8 +11,11 @@ const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const route = useRoute()
 
-// Shared top bar — search query + placeholder come from the active page.
+// Shared top bar — search query + placeholder come from the active page. A page
+// with its own in-content search opts out with
+// `definePageMeta({ topbarSearch: false })`, so one query never has two boxes.
 const { search, placeholder } = useTopbar()
+const showTopbarSearch = computed(() => route.meta.topbarSearch !== false)
 function newCampaign() {
   navigateTo('/campaigns/new')
 }
@@ -133,7 +136,7 @@ async function logout() {
     <main class="main">
       <!-- Shared top bar -->
       <header class="topbar">
-        <div class="search">
+        <div v-if="showTopbarSearch" class="search">
           <i class="ph ph-magnifying-glass search__icon" />
           <input v-model="search" class="search__input" :placeholder="placeholder" />
           <span class="search__kbd">⌘K</span>

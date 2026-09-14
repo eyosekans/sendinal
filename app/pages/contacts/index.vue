@@ -9,17 +9,22 @@ import ListFormModal from '~/components/contacts/ListFormModal.vue'
 import ImportWizardModal from '~/components/contacts/ImportWizardModal.vue'
 import ConfirmDeleteModal from '~/components/ConfirmDeleteModal.vue'
 
+// The search box lives above the table, next to the list and status filters it
+// combines with. The topbar box would be a second control for the same query,
+// so it is hidden on this screen rather than mirrored.
+definePageMeta({ topbarSearch: false })
+
 useHead({ title: 'Contacts — Sendinal' })
 
-// Shared list controls: topbar-bound debounced search + page + persisted
-// page size (see useListControls).
+// Shared list controls in screen-local search mode: debounced search + page +
+// persisted page size (see useListControls).
 const {
+  searchInput,
   search: debouncedSearch,
   page,
   pageSize,
-} = useListControls('contacts', {
-  topbarPlaceholder: 'Search contacts by name or email…',
-})
+  resetSearch,
+} = useListControls('contacts')
 
 /* ---------- query state ---------- */
 const tab = ref<'all' | ContactStatus>('all')
@@ -41,18 +46,47 @@ const {
   query: listQuery,
   default: () => ({ data: [] as Contact[], total: 0, page: 1, limit: pageSize.value }),
 })
-const { data: stats, refresh: refreshStats } = await useFetch(
+type ContactStats = { all: number } & Record<ContactStatus, number>
+const emptyStats = (): ContactStats => ({
+  all: 0,
+  active: 0,
+  unsubscribed: 0,
+  bounced: 0,
+  complained: 0,
+})
+// Workspace-wide, unfiltered counts: the "All Contacts" entry in the lists
+// panel and the page header.
+const { data: stats, refresh: refreshAllStats } = await useFetch(
   '/api/contacts/stats',
-  {
-    default: () => ({
-      all: 0,
-      active: 0,
-      unsubscribed: 0,
-      bounced: 0,
-      complained: 0,
-    }),
-  },
+  { default: emptyStats },
 )
+// Counts narrowed by the selected list and search, so every status tab equals
+// the table total it would show. Not fetched when nothing narrows — the
+// workspace counts already are exactly that.
+const { data: filteredStats, refresh: refreshFilteredStats } =
+  await useAsyncData(
+    'contacts-filtered-stats',
+    (): Promise<ContactStats | null> =>
+      selectedListId.value || debouncedSearch.value
+        ? $fetch<ContactStats>('/api/contacts/stats', {
+            query: {
+              ...(selectedListId.value ? { listId: selectedListId.value } : {}),
+              ...(debouncedSearch.value
+                ? { search: debouncedSearch.value }
+                : {}),
+            },
+          })
+        : Promise.resolve(null),
+    { watch: [selectedListId, debouncedSearch] },
+  )
+const scopedStats = computed(() =>
+  selectedListId.value || debouncedSearch.value
+    ? filteredStats.value
+    : stats.value,
+)
+function refreshStats() {
+  return Promise.all([refreshAllStats(), refreshFilteredStats()])
+}
 const { data: listsRaw, refresh: refreshLists } = await useFetch('/api/lists', {
   default: () => [] as List[],
 })
@@ -64,6 +98,11 @@ const selectedList = computed(
   () => lists.value.find((l) => l.id === selectedListId.value) ?? null,
 )
 const headerTitle = computed(() => selectedList.value?.name ?? 'All Contacts')
+// Size of the selected scope, independent of search and status tab — those
+// are reported by the tab badges and the pager.
+const scopeSize = computed(() =>
+  selectedList.value ? selectedList.value.contactCount : stats.value.all,
+)
 
 // Row selection shouldn't survive a change of what's being listed.
 watch([debouncedSearch, pageSize], () => clearSelection())
@@ -85,7 +124,7 @@ const TABS: { key: 'all' | ContactStatus; label: string }[] = [
   { key: 'complained', label: 'Complained' },
 ]
 function tabCount(key: 'all' | ContactStatus) {
-  return stats.value?.[key] ?? 0
+  return scopedStats.value?.[key] ?? 0
 }
 function setTab(key: 'all' | ContactStatus) {
   if (tab.value === key) return
@@ -276,6 +315,22 @@ async function confirmDelete() {
 }
 
 const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
+// An empty scope (no contacts at all / an empty list) reads differently from
+// filters that exclude everyone, and offers a different way out.
+const isFiltered = computed(() => !!debouncedSearch.value || tab.value !== 'all')
+const filteredEmptyMessage = computed(() => {
+  const scope = selectedList.value ? selectedList.value.name : 'your contacts'
+  const tabLabel = TABS.find((t) => t.key === tab.value)?.label ?? ''
+  if (!debouncedSearch.value)
+    return `No ${tabLabel.toLowerCase()} contacts in ${scope}.`
+  const onTab = tab.value !== 'all' ? ` on the ${tabLabel} tab` : ''
+  return `Nothing in ${scope} matches “${debouncedSearch.value}”${onTab}.`
+})
+function clearFilters() {
+  resetSearch()
+  tab.value = 'all'
+  clearSelection()
+}
 </script>
 
 <template>
@@ -285,7 +340,7 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
       <ListsPanel
         :lists="lists"
         :selected-list-id="selectedListId"
-        :total-count="tabCount('all')"
+        :total-count="stats.all"
         @select="selectList"
         @create="openCreateList"
         @edit="openEditList"
@@ -301,7 +356,7 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
                 <div class="header__crumb">Contacts</div>
                 <h1 class="header__title">{{ headerTitle }}</h1>
                 <div class="header__sub">
-                  {{ selectedList ? selectedList.contactCount : total }} contacts
+                  {{ scopeSize }} contacts
                 </div>
               </div>
               <div class="header__actions">
@@ -318,24 +373,45 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
               </div>
             </div>
 
-            <!-- status tabs -->
-            <div class="tabs">
-              <button
-                v-for="t in TABS"
-                :key="t.key"
-                type="button"
-                class="tab"
-                :class="{ 'tab--active': tab === t.key }"
-                @click="setTab(t.key)"
-              >
-                {{ t.label }}
-                <span
-                  class="tab__count"
-                  :class="{ 'tab__count--active': tab === t.key }"
+            <!-- status tabs + search -->
+            <div class="toolbar">
+              <div class="tabs">
+                <button
+                  v-for="t in TABS"
+                  :key="t.key"
+                  type="button"
+                  class="tab"
+                  :class="{ 'tab--active': tab === t.key }"
+                  @click="setTab(t.key)"
                 >
-                  {{ tabCount(t.key) }}
-                </span>
-              </button>
+                  {{ t.label }}
+                  <span
+                    class="tab__count"
+                    :class="{ 'tab__count--active': tab === t.key }"
+                  >
+                    {{ tabCount(t.key) }}
+                  </span>
+                </button>
+              </div>
+              <div class="csearch">
+                <i class="ph ph-magnifying-glass" />
+                <input
+                  v-model="searchInput"
+                  type="search"
+                  class="csearch__input"
+                  placeholder="Search contacts by name or email…"
+                  aria-label="Search contacts"
+                />
+                <button
+                  v-if="searchInput"
+                  type="button"
+                  class="csearch__clear"
+                  aria-label="Clear search"
+                  @click="resetSearch"
+                >
+                  <i class="ph ph-x" />
+                </button>
+              </div>
             </div>
 
             <!-- selection bar -->
@@ -421,14 +497,29 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
               </div>
 
               <!-- empty -->
-              <div v-if="isEmpty" class="empty">
+              <div v-if="isEmpty && isFiltered" class="empty">
                 <div class="empty__icon">
                   <i class="ph ph-magnifying-glass" />
                 </div>
                 <div class="empty__title">No contacts match your filters</div>
+                <div class="empty__desc">{{ filteredEmptyMessage }}</div>
+                <button type="button" class="btn-secondary empty__action" @click="clearFilters">
+                  Clear filters
+                </button>
+              </div>
+              <div v-else-if="isEmpty" class="empty">
+                <div class="empty__icon">
+                  <i class="ph ph-users" />
+                </div>
+                <div class="empty__title">
+                  {{ selectedList ? 'This list is empty' : 'No contacts yet' }}
+                </div>
                 <div class="empty__desc">
-                  Try a different status tab or clear your search to see everyone
-                  in your contacts.
+                  {{
+                    selectedList
+                      ? `Import a CSV or add contacts to ${selectedList.name} to get started.`
+                      : 'Import a CSV or add your first contact to get started.'
+                  }}
                 </div>
               </div>
 
@@ -604,6 +695,13 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
 }
 
 /* tabs */
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
 .tabs {
   display: flex;
   align-items: center;
@@ -612,7 +710,61 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
   background: var(--gray-100);
   border-radius: 8px;
   width: fit-content;
-  margin-bottom: 20px;
+}
+.csearch {
+  flex: 1 1 260px;
+  max-width: 380px;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 8px 0 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+.csearch .ph-magnifying-glass {
+  font-size: 15px;
+  color: var(--gray-400);
+}
+.csearch__input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  color: var(--gray-800);
+}
+.csearch__input::placeholder {
+  color: var(--gray-400);
+}
+/* The clear button below replaces the browser's own type="search" cancel. */
+.csearch__input::-webkit-search-cancel-button {
+  display: none;
+}
+.csearch:focus-within {
+  border-color: var(--primary-600);
+  outline: 2px solid var(--primary-100);
+  outline-offset: 0;
+}
+.csearch__clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--gray-400);
+  cursor: pointer;
+}
+.csearch__clear:hover {
+  background: var(--gray-100);
+  color: var(--gray-700);
 }
 .tab {
   display: flex;
@@ -705,6 +857,9 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
 
 /* table */
 .table {
+  /* Tailwind's `.table` utility sets display: table, which shrink-wraps the
+     card to its content — an empty state would render narrower than the page. */
+  display: block;
   background: #fff;
   border: 1px solid var(--gray-200);
   border-radius: var(--radius-lg);
@@ -880,6 +1035,9 @@ const isEmpty = computed(() => !pending.value && contacts.value.length === 0)
   max-width: 360px;
   margin: 0 auto;
   line-height: 1.6;
+}
+.empty__action {
+  margin: 20px auto 0;
 }
 
 </style>

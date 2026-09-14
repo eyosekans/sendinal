@@ -17,7 +17,9 @@ interface ListControlsOptions {
   /**
    * Placeholder for the shared topbar search box. When set, `searchInput` is
    * the topbar query (and it is cleared on screen entry). Omit to get a
-   * screen-local search ref instead (e.g. a panel-scoped search box).
+   * screen-local search ref instead (e.g. a panel-scoped search box). When that
+   * local box is the screen's main search, hide the topbar box with
+   * `definePageMeta({ topbarSearch: false })` so the query has one control.
    */
   topbarPlaceholder?: string
   /** Initial page size when no cookie is stored yet (default 25). */

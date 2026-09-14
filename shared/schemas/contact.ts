@@ -36,7 +36,7 @@ export type UpdateContactInput = z.infer<typeof updateContactSchema>
 export const listContactsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
-  /** Case-insensitive substring match on email. */
+  /** Case-insensitive substring match on email, first or last name. */
   search: z.string().trim().min(1).optional(),
   status: contactStatusSchema.optional(),
   /** Restrict to members of this list. */
@@ -48,6 +48,14 @@ export const listContactsQuerySchema = z.object({
     .transform((v) => v === 'true'),
 })
 export type ListContactsQuery = z.infer<typeof listContactsQuerySchema>
+
+/** Query params for per-status counts (GET /api/contacts/stats). */
+export const contactStatsQuerySchema = z.object({
+  /** Count only members of this list. */
+  listId: z.string().uuid().optional(),
+  /** Count only contacts matching this search (same match as GET /api/contacts). */
+  search: z.string().trim().min(1).optional(),
+})
 
 /** Loose email format check (matches the wizard's client-side validation). */
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
