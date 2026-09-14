@@ -31,7 +31,7 @@ This is an **internal tool**: no public sign-up, no multi-tenancy, no billing lo
 ## External Services
 
 ### Amazon SES
-- Primary email sending engine (SES v1 API, `@aws-sdk/client-ses`).
+- Primary email sending engine (SESv2 `SendEmail`, `@aws-sdk/client-sesv2` — v2 for the List-Unsubscribe headers).
 - Requires domain verification with DKIM/SPF records.
 - Sending quota: starts at sandbox mode, must request production access.
 - Bounce and complaint notifications are forwarded via SNS.

@@ -232,7 +232,8 @@ DELETE /api/templates/:id          delete template
 ```
 GET    /t/o/:token                 open pixel — returns GIF, records open event
 GET    /t/c/:token                 click redirect — records click, redirects
-GET    /t/u/:token                 unsubscribe — marks contact unsubscribed, shows confirmation page
+GET    /t/u/:token                 unsubscribe link — confirmation page only, no side effect
+POST   /t/u/:token                 unsubscribe — confirm button or RFC 8058 one-click; marks contact unsubscribed
 ```
 
 ### Webhooks (verified by SNS signature)
@@ -252,7 +253,9 @@ POST   /api/webhooks/ses           SES bounce/complaint events from SQS
    - Creates a `sends` row per contact (`status = 'queued'`).
    - Replaces `<img>` pixel and `<a href>` tags in the campaign HTML with tracked URLs.
    - Enqueues one `email.send` job per contact.
-4. Individual send jobs call the AWS SES SDK (`SendEmail`).
+4. Individual send jobs call SESv2 `SendEmail` (`worker/lib/ses.ts`), with
+   `List-Unsubscribe` / `List-Unsubscribe-Post` headers pointing at the send's
+   `/t/u/:token` URL.
 5. On success: updates `sends.status = 'sent'`, stores `ses_message_id`.
 6. On failure: updates `sends.status = 'failed'`, stores error, BullMQ retries up to 3×.
 7. After all jobs complete: updates `campaigns.status = 'sent'`, sets `sent_at`.
@@ -307,8 +310,8 @@ verdict", and a row with no verdict imports exactly as it would with validation
 switched off. At most 5,000 addresses are validated per import
 (`VALIDATION_MAX_PER_IMPORT`); the wizard says so when a file exceeds it.
 
-Sending runs on SES v1 (`@aws-sdk/client-ses`), which has no insights operation,
-so validation uses a separate SESv2 client (`server/utils/sesValidation.ts`).
+Validation has its own SESv2 client (`server/utils/sesValidation.ts`), separate
+from the worker's sending client.
 IAM needs `ses:GetEmailAddressInsights` and `iam:CreateServiceLinkedRole`.
 
 ### Auto Validation (account-level, already enabled)
@@ -335,6 +338,30 @@ prediction, not a mailbox rejection, so both bounce handlers special-case it:
 
 Suppressed sends still consume send quota and are still billed the normal
 message fee.
+
+---
+
+## Unsubscribe Flow
+
+Every send carries an unsubscribe token (`tracking_tokens.type = 'unsubscribe'`),
+used both in the footer link and in the RFC 8058 headers.
+
+- `GET /t/u/:token` renders a confirmation page and **changes nothing**. Mail
+  security scanners (Safe Links etc.) fetch every URL in a message seconds after
+  delivery; while GET unsubscribed on the spot, they unsubscribed ~19% of one
+  corporate-list campaign — each such recipient had every link "clicked" ~30s
+  after the send.
+- `POST /t/u/:token` performs it: the confirmation page's button, or a mailbox
+  provider's one-click request (`List-Unsubscribe=One-Click`). An `active`
+  contact becomes `unsubscribed` and one `email_events` row of type
+  `unsubscribed` is written **on the send**, which is what attributes the
+  unsubscribe to its campaign. Repeat requests are no-ops.
+- Dispatch only selects `active` contacts, so the next campaign skips them.
+  Restoring a soft-deleted contact (manual add or CSV import) keeps its status.
+
+On the campaign detail page each recipient gets one derived status, highest
+first: `unsubscribed > complained > clicked > opened > delivery status`, so the
+Unsubscribed filter equals the stats card's unsubscribe count.
 
 ---
 

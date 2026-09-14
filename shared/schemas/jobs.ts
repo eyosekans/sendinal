@@ -21,6 +21,12 @@ export const emailSendJobSchema = z.object({
   html: z.string(),
   fromName: z.string(),
   fromEmail: z.string().email(),
+  /**
+   * This send's `/t/u/:token` URL, advertised in the List-Unsubscribe headers.
+   * Absent when dispatch ran without a public APP_URL (no tracking tokens), and
+   * on jobs enqueued before the field existed.
+   */
+  unsubscribeUrl: z.string().url().optional(),
 })
 export type EmailSendJob = z.infer<typeof emailSendJobSchema>
 

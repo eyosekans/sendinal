@@ -35,15 +35,16 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Campaign not found' })
   }
 
-  // All sends for the campaign (id + status), tallied in-app.
-  const { data: sendRows, error: sErr } = await supabase
-    .from('sends')
-    .select('id, status, variant')
-    .eq('campaign_id', id)
-  if (sErr) {
-    throw createError({ statusCode: 500, statusMessage: sErr.message })
-  }
-  const sends = sendRows ?? []
+  // All sends for the campaign (id + status), tallied in-app — paged, or a
+  // campaign past 1000 recipients would under-count.
+  const sends = await fetchAllRows((from, to) =>
+    supabase
+      .from('sends')
+      .select('id, status, variant')
+      .eq('campaign_id', id)
+      .order('id')
+      .range(from, to),
+  )
 
   const counts: Record<SendStatus, number> = {
     queued: 0,
@@ -63,15 +64,18 @@ export default defineEventHandler(async (event) => {
   if (sends.length) {
     // Filtered through the sends join, not an `.in()` over every send id — that
     // list goes into the URL and overflows it on a large campaign.
-    const { data: events, error: eErr } = await supabase
-      .from('email_events')
-      .select('send_id, type, sends!inner(campaign_id)')
-      .eq('sends.campaign_id', id)
-      .in('type', ['opened', 'clicked', 'unsubscribed'])
-    if (eErr) {
-      throw createError({ statusCode: 500, statusMessage: eErr.message })
-    }
-    for (const e of events ?? []) {
+    // Paged: a busy campaign has far more events than recipients, and a single
+    // select stops at 1000 rows — this used to under-report every metric.
+    const events = await fetchAllRows((from, to) =>
+      supabase
+        .from('email_events')
+        .select('send_id, type, sends!inner(campaign_id)')
+        .eq('sends.campaign_id', id)
+        .in('type', ['opened', 'clicked', 'unsubscribed'])
+        .order('id')
+        .range(from, to),
+    )
+    for (const e of events) {
       if (e.type === 'opened') openedSends.add(e.send_id)
       else if (e.type === 'clicked') clickedSends.add(e.send_id)
       else unsubscribedSends.add(e.send_id)

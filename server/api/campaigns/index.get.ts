@@ -71,16 +71,20 @@ export default defineEventHandler(async (event) => {
   const clicks = new Map<string, Set<string>>()
 
   if (ids.length) {
-    const { data: sends, error: sErr } = await supabase
-      .from('sends')
-      .select('id, campaign_id')
-      .in('campaign_id', ids)
-    if (sErr) {
-      throw createError({ statusCode: 500, statusMessage: sErr.message })
-    }
+    // Paged, like the events below: one page of campaigns holds thousands of
+    // sends, and a single select stops at 1000 rows — recipients and both
+    // rates were computed from a truncated set.
+    const sends = await fetchAllRows((from, to) =>
+      supabase
+        .from('sends')
+        .select('id, campaign_id')
+        .in('campaign_id', ids)
+        .order('id')
+        .range(from, to),
+    )
 
     const sendToCampaign = new Map<string, string>()
-    for (const s of sends ?? []) {
+    for (const s of sends) {
       sendToCampaign.set(s.id, s.campaign_id)
       recipients.set(s.campaign_id, (recipients.get(s.campaign_id) ?? 0) + 1)
     }
@@ -91,15 +95,16 @@ export default defineEventHandler(async (event) => {
     // fail the whole request with a bare "Bad Request". Only the campaign ids
     // travel in the URL here, so this scales with page size, not send volume.
     if (sendToCampaign.size) {
-      const { data: events, error: eErr } = await supabase
-        .from('email_events')
-        .select('send_id, type, sends!inner(campaign_id)')
-        .in('sends.campaign_id', ids)
-        .in('type', ['opened', 'clicked'])
-      if (eErr) {
-        throw createError({ statusCode: 500, statusMessage: eErr.message })
-      }
-      for (const e of events ?? []) {
+      const events = await fetchAllRows((from, to) =>
+        supabase
+          .from('email_events')
+          .select('id, send_id, type, sends!inner(campaign_id)')
+          .in('sends.campaign_id', ids)
+          .in('type', ['opened', 'clicked'])
+          .order('id')
+          .range(from, to),
+      )
+      for (const e of events) {
         const cid = sendToCampaign.get(e.send_id)
         if (!cid) continue
         const bucket = e.type === 'opened' ? opens : clicks

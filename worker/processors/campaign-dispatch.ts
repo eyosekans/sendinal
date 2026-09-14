@@ -19,6 +19,8 @@ import {
 } from '../lib/tracking.ts'
 
 const MAX_ATTEMPTS = 3
+/** Rows per recipient page; must not exceed PostgREST's max-rows (1000). */
+const PAGE_SIZE = 1000
 
 /**
  * Fan-out processor: reads a campaign's recipients (list members that are
@@ -44,14 +46,13 @@ export async function processCampaignDispatch(job: Job) {
   if (!campaign.list_id) throw new Error(`campaign ${campaignId} has no list`)
 
   // Resolve recipients: list members that are still sendable.
-  const { data: members, error: mErr } = await supabase
+  const { count: memberCount, error: mErr } = await supabase
     .from('list_contacts')
-    .select('contact_id')
+    .select('contact_id', { count: 'exact', head: true })
     .eq('list_id', campaign.list_id)
   if (mErr) throw mErr
 
-  const memberIds = (members ?? []).map((m) => m.contact_id)
-  if (memberIds.length === 0) {
+  if (!memberCount) {
     await finalizeCampaignIfComplete(campaignId)
     console.log(`[campaign.dispatch] campaign ${campaignId}: no members`)
     return
@@ -60,16 +61,27 @@ export async function processCampaignDispatch(job: Job) {
   // Membership is filtered through the join, NOT `.in('id', memberIds)`:
   // PostgREST puts that id list in the query string, so a large list would
   // overflow the URL and fail the dispatch — i.e. silently stop a send.
-  const { data: sendable, error: ctErr } = await supabase
-    .from('contacts')
-    .select(
-      'id, email, first_name, last_name, status, attributes, list_contacts!inner(list_id)',
-    )
-    .eq('list_contacts.list_id', campaign.list_id)
-    .eq('status', 'active')
-    .eq('email_unverified', false)
-    .is('deleted_at', null)
-  if (ctErr) throw ctErr
+  //
+  // Paged: a single select stops at PostgREST's max-rows (1000), which would
+  // quietly send the campaign to the first thousand recipients only. Ordered
+  // by id so pages neither overlap nor skip.
+  const sendable = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error: ctErr } = await supabase
+      .from('contacts')
+      .select(
+        'id, email, first_name, last_name, status, attributes, list_contacts!inner(list_id)',
+      )
+      .eq('list_contacts.list_id', campaign.list_id)
+      .eq('status', 'active')
+      .eq('email_unverified', false)
+      .is('deleted_at', null)
+      .order('id')
+      .range(from, from + PAGE_SIZE - 1)
+    if (ctErr) throw ctErr
+    sendable.push(...data)
+    if (data.length < PAGE_SIZE) break
+  }
 
   // Apply the campaign's segment rules (task 3.2) on top of the list. An empty
   // rule set matches everyone, so unsegmented campaigns target the whole list.
@@ -126,6 +138,7 @@ export async function processCampaignDispatch(job: Job) {
   // public APP_URL for absolute links; without it we send plain HTML.
   const appUrl = (process.env.NUXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
   const htmlBySend = new Map<string, string>()
+  const unsubUrlBySend = new Map<string, string>()
   type TokenRow = {
     token: string
     send_id: string
@@ -151,7 +164,9 @@ export async function processCampaignDispatch(job: Job) {
       // 2.5 — unsubscribe link (after click rewrite so it isn't /t/c-wrapped).
       const unsubToken = generateToken()
       tokenRows.push({ token: unsubToken, send_id: s.id, type: 'unsubscribe' })
-      const withUnsub = injectUnsubscribe(clicked, `${appUrl}/t/u/${unsubToken}`)
+      const unsubUrl = `${appUrl}/t/u/${unsubToken}`
+      unsubUrlBySend.set(s.id, unsubUrl)
+      const withUnsub = injectUnsubscribe(clicked, unsubUrl)
       // 2.3 — inject the open pixel last.
       const openToken = generateToken()
       tokenRows.push({ token: openToken, send_id: s.id, type: 'open' })
@@ -180,6 +195,7 @@ export async function processCampaignDispatch(job: Job) {
         html,
         fromName: campaign.from_name,
         fromEmail: campaign.from_email,
+        unsubscribeUrl: unsubUrlBySend.get(s.id),
       }
       return {
         name: 'send',

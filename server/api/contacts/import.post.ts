@@ -59,18 +59,21 @@ export default defineEventHandler(async (event) => {
   for (const c of contacts) byEmail.set(c.email, c)
   const rows = [...byEmail.values()]
 
-  // Which of these emails already exist?
-  const { data: existingRows, error: exErr } = await supabase
-    .from('contacts')
-    .select('id, email')
-    .in(
-      'email',
-      rows.map((r) => r.email),
-    )
-  if (exErr) {
-    throw createError({ statusCode: 500, statusMessage: exErr.message })
+  // Which of these emails already exist? Chunked: the payload allows 10,000
+  // rows, and one `.in()` over them both overflows the request URL and would
+  // return at most 1000 matches — the rest would be re-inserted as duplicates.
+  const existingRows: { id: string; email: string }[] = []
+  for (const batch of chunked(rows.map((r) => r.email))) {
+    const { data, error: exErr } = await supabase
+      .from('contacts')
+      .select('id, email')
+      .in('email', batch)
+    if (exErr) {
+      throw createError({ statusCode: 500, statusMessage: exErr.message })
+    }
+    existingRows.push(...(data ?? []))
   }
-  const existing = new Map((existingRows ?? []).map((r) => [r.email, r.id]))
+  const existing = new Map(existingRows.map((r) => [r.email, r.id]))
 
   const fieldsOf = (c: (typeof rows)[number]) => ({
     email: c.email,

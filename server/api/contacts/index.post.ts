@@ -122,12 +122,13 @@ export default defineEventHandler(async (event) => {
       return data
     }
 
-    // Restore the soft-deleted contact with the new details.
+    // Restore the soft-deleted contact with the new details. Its status is kept
+    // (as the CSV import does): deleting and re-adding someone who unsubscribed,
+    // bounced or complained must not quietly make them sendable again.
     const { data, error } = await supabase
       .from('contacts')
       .update({
         ...fields,
-        status: 'active',
         deleted_at: null,
       })
       .eq('id', existing.id)

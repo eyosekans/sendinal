@@ -6,10 +6,20 @@ import { activityStatusSchema } from '#shared/schemas'
 /**
  * GET /api/campaigns/:id/activity?page=&limit=&search=&status=
  * Paginated "individual send results": one row per recipient with their derived
- * engagement status (clicked > opened > unsubscribed > the send's delivery
- * status) and the time of the latest signal. `search` matches the recipient's
+ * status and the time of the latest signal. `search` matches the recipient's
  * email or name; `status` filters on the derived status, so `total` always
  * reflects the filtered set and stays consistent with pagination.
+ *
+ * Each recipient gets exactly one status, highest first:
+ *
+ *   unsubscribed > complained > clicked > opened > the send's delivery status
+ *
+ * Terminal outcomes outrank engagement. Opening or clicking almost always
+ * precedes an unsubscribe (the link sits in the email, and security scanners
+ * fetch every link at once), so ranking engagement first hid every unsubscribe
+ * behind `clicked`/`opened` and the Unsubscribed filter always came back empty.
+ * With this order the Unsubscribed filter equals the stats endpoint's
+ * `counts.unsubscribed` (distinct sends with an `unsubscribed` event).
  *
  * The derived status lives across two tables, so filtering loads the campaign's
  * sends + events and derives in-app — same trade-off as the stats endpoint
@@ -40,25 +50,33 @@ export default defineEventHandler(async (event) => {
   const supabase = await serverSupabaseClient<Database>(event)
 
   // All sends for the campaign with their recipient embedded (avoids an
-  // unbounded `.in(contact_id, …)` URL when searching).
-  const { data: sends, error: sErr } = await supabase
-    .from('sends')
-    .select(
-      'id, contact_id, status, sent_at, created_at, contacts(email, first_name, last_name)',
-    )
-    .eq('campaign_id', id)
-  if (sErr) throw createError({ statusCode: 500, statusMessage: sErr.message })
+  // unbounded `.in(contact_id, …)` URL when searching). Both reads are paged:
+  // a single select stops at 1000 rows, which silently dropped events (and so
+  // statuses) on any campaign with more than a thousand of them.
+  const sends = await fetchAllRows((from, to) =>
+    supabase
+      .from('sends')
+      .select(
+        'id, contact_id, status, sent_at, created_at, contacts(email, first_name, last_name)',
+      )
+      .eq('campaign_id', id)
+      .order('id')
+      .range(from, to),
+  )
 
   // All engagement events for the campaign (filtered via the sends join).
   const signal = new Map<string, { clicked: boolean; opened: boolean; unsub: boolean }>()
   const latest = new Map<string, string>()
-  if (sends?.length) {
-    const { data: events, error: eErr } = await supabase
-      .from('email_events')
-      .select('send_id, type, occurred_at, sends!inner(campaign_id)')
-      .eq('sends.campaign_id', id)
-    if (eErr) throw createError({ statusCode: 500, statusMessage: eErr.message })
-    for (const e of events ?? []) {
+  if (sends.length) {
+    const events = await fetchAllRows((from, to) =>
+      supabase
+        .from('email_events')
+        .select('send_id, type, occurred_at, sends!inner(campaign_id)')
+        .eq('sends.campaign_id', id)
+        .order('id')
+        .range(from, to),
+    )
+    for (const e of events) {
       const sig = signal.get(e.send_id) ?? {
         clicked: false,
         opened: false,
@@ -73,17 +91,19 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const statusFor = (s: NonNullable<typeof sends>[number]): string => {
+  // Precedence documented at the top of the file.
+  const statusFor = (s: (typeof sends)[number]): string => {
     const sig = signal.get(s.id)
+    if (sig?.unsub) return 'unsubscribed'
+    if (s.status === 'complained') return 'complained'
     if (sig?.clicked) return 'clicked'
     if (sig?.opened) return 'opened'
-    if (sig?.unsub) return 'unsubscribed'
     if (s.status === 'sent') return 'delivered'
-    return s.status // bounced | complained | failed | queued
+    return s.status // bounced | suppressed | failed | queued
   }
 
   const q = search?.toLowerCase()
-  const matchesSearch = (c: NonNullable<typeof sends>[number]['contacts']) => {
+  const matchesSearch = (c: (typeof sends)[number]['contacts']) => {
     if (!q) return true
     if (!c) return false
     return (
@@ -93,7 +113,7 @@ export default defineEventHandler(async (event) => {
     )
   }
 
-  const filtered = (sends ?? [])
+  const filtered = sends
     .map((s) => ({
       sendId: s.id,
       email: s.contacts?.email ?? '—',
