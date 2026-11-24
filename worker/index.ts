@@ -125,7 +125,10 @@ dispatchWorker.on('failed', async (job, err) => {
 emailWorker.on('failed', async (job, err) => {
   if (!job) return
   const maxAttempts = job.opts.attempts ?? 1
-  if (job.attemptsMade < maxAttempts) return // more retries pending
+  // An UnrecoverableError skips the remaining attempts, so it is terminal on
+  // the first failure — don't wait for an attempt count that will never come.
+  const unrecoverable = err.name === 'UnrecoverableError'
+  if (!unrecoverable && job.attemptsMade < maxAttempts) return
 
   const parsed = emailSendJobSchema.safeParse(job.data)
   if (!parsed.success) return
