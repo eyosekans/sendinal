@@ -45,7 +45,9 @@ export const QUEUE_NAMES = {
  * after recording the failure, so a dead job can't block a later retry.
  */
 export function dispatchJobId(campaignId: string): string {
-  return `dispatch:${campaignId}`
+  // Hyphen, not a colon: BullMQ rejects a custom job id containing ':' (it
+  // namespaces its own Redis keys with it).
+  return `dispatch-${campaignId}`
 }
 
 /**
