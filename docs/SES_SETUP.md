@@ -117,11 +117,26 @@ Console → **SES → Identities → Create identity → Domain**. Enter `<DOMAI
 enable **Easy DKIM** (RSA 2048). SES gives you **3 CNAME records** — add them at
 your DNS provider. Verification flips to "Verified" once DNS propagates.
 
+⚠️ If your DNS is behind Cloudflare, the three CNAMEs must be **DNS only**
+(grey cloud, `cf-proxied:false`). Proxying them makes Cloudflare answer with its
+own IPs, the CNAME chain breaks, and DKIM never verifies.
+
 Recommended for deliverability:
 - **Custom MAIL FROM** (SES → identity → Custom MAIL FROM, e.g. `bounce.<DOMAIN>`)
-  → add the **MX** and **SPF (TXT)** records SES shows.
-- If not using a custom MAIL FROM, add SPF to the domain TXT:
-  `v=spf1 include:amazonses.com ~all`
+  → add the **MX** and **SPF (TXT)** records SES shows. This is what gets SPF
+  *aligned* with your From domain: SPF authenticates the envelope sender
+  (Return-Path), not the `From:` header, so it only covers you when the envelope
+  domain is yours.
+- Without a custom MAIL FROM, SES uses its own `*.amazonses.com` envelope, SPF is
+  evaluated against **that** domain, and your domain's SPF record is never
+  consulted for these messages — DKIM is then the only thing authenticating them.
+  Adding `v=spf1 include:amazonses.com ~all` to the domain TXT is harmless but
+  does not change that; it matters only if something else sends with your domain
+  as the envelope.
+- Under a DMARC policy of `p=quarantine` or `p=reject` this is load-bearing: DMARC
+  needs SPF *or* DKIM to pass **with alignment**. With no custom MAIL FROM, that
+  is DKIM alone — so a DKIM lapse doesn't merely leave mail unauthenticated, it
+  sends every message to quarantine.
 
 CLI to check status:
 
@@ -131,6 +146,43 @@ aws ses get-identity-dkim-attributes --identities <DOMAIN> --region <REGION>
 ```
 
 Set `NUXT_SES_FROM_EMAIL` to an address on this domain (e.g. `hello@<DOMAIN>`).
+
+### 2b. Recovering a lost verification (`DkimStatus: FAILED`)
+
+Verification is not permanent: SES re-checks the CNAMEs, and if they disappear
+(a DNS migration that drops them, say) it **revokes** the identity. Every send
+then fails with:
+
+```
+MessageRejected: Email address is not verified. The following identities failed
+the check in region EU-CENTRAL-1: <Name> <you@domain>
+```
+
+The tell is *which* identity the message names: the **From** address means a
+revoked sender identity, whereas the sandbox error names the **recipients**.
+This happened on 2026-11-24 — the records had vanished from `woomast.com`.
+
+To recover:
+
+1. Re-add the three CNAMEs. **The tokens survive revocation**, so read them back
+   with SESv2 `GetEmailIdentity` → `DkimAttributes.Tokens` and re-add the *same*
+   records. ⚠️ Do **not** delete and re-create the identity — that issues new
+   tokens and you start over.
+2. Wait. The zone's negative-cache TTL (SOA minimum; 30 min on this domain) can
+   keep SES's resolver convinced the records don't exist. On 2026-11-24 the
+   status flipped back to `SUCCESS` on its own ~18 minutes after the records went
+   in, with no console action.
+3. If it stays `FAILED`, force a re-check in the **console** (SES → identity →
+   DKIM → Edit → toggle DKIM signatures off, save, on, save). This keeps the
+   tokens. It cannot be scripted with the app's credentials: the `sendinal-ses`
+   policy above grants neither `ses:PutEmailIdentityDkimAttributes` nor
+   `ses:ListEmailIdentities`, so look identities up by name with
+   `GetEmailIdentity` and do the toggle as an admin.
+
+A `MailFromDomainStatus: FAILED` on its own does **not** block sending while
+`BehaviorOnMxFailure` is `USE_DEFAULT_VALUE` (SES falls back to its own envelope
+domain) — but it does cost you SPF alignment, which matters under DMARC as
+described above.
 
 ---
 
