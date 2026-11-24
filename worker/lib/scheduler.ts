@@ -1,5 +1,6 @@
 import type { Queue } from 'bullmq'
 import { supabase } from './supabase.ts'
+import { DISPATCH_JOB_OPTS, dispatchJobId } from '../../shared/schemas/jobs.ts'
 
 /**
  * Every 60s, dispatch campaigns whose `scheduled_at` is due. Runs in the worker
@@ -49,7 +50,7 @@ export function startScheduler(dispatchQueue: Queue): { stop: () => void } {
         await dispatchQueue.add(
           'dispatch',
           { campaignId: c.id },
-          { removeOnComplete: true, removeOnFail: false },
+          { ...DISPATCH_JOB_OPTS, jobId: dispatchJobId(c.id) },
         )
         console.log(`[scheduler] dispatched scheduled campaign ${c.id}`)
       } catch (err) {

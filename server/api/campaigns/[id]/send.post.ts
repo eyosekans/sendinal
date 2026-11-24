@@ -60,22 +60,26 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  // Fast path: hand the fan-out straight to the queue.
+  //
+  // Slow path: this connection crosses the public internet (Vercel → Railway
+  // Redis), so it can be down while everything else is healthy. The campaign
+  // deliberately STAYS `sending` — that row is now the durable record of intent,
+  // and the worker's recovery sweep (`worker/lib/dispatch-recovery.ts`) claims
+  // any `sending` campaign that has no sends yet, enqueueing the dispatch from
+  // inside Railway's private network where Redis is always reachable. Rolling
+  // back to `draft` here (the old behaviour) threw the user's send away, and a
+  // hanging enqueue left the campaign wedged with no error at all.
+  let dispatch: 'queued' | 'deferred' = 'queued'
   try {
-    await getCampaignDispatchQueue().add(
-      'dispatch',
-      { campaignId: id },
-      { removeOnComplete: true, removeOnFail: false },
-    )
+    await enqueueCampaignDispatch(id)
   } catch (err) {
-    // Roll back so the campaign can be retried.
-    await supabase.from('campaigns').update({ status: 'draft' }).eq('id', id)
-    throw createError({
-      statusCode: 503,
-      statusMessage:
-        'Could not enqueue the campaign — the job queue is unavailable',
-      data: { error: (err as Error).message },
-    })
+    dispatch = 'deferred'
+    console.error(
+      `[campaigns/send] enqueue failed for ${id}, deferring to the worker recovery sweep:`,
+      (err as Error).message,
+    )
   }
 
-  return { id, status: 'sending' }
+  return { id, status: 'sending', dispatch }
 })

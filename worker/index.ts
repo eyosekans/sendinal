@@ -1,14 +1,20 @@
 import { Worker, Queue } from 'bullmq'
 import { connection } from './queues/connection.ts'
-import { QUEUE_NAMES, emailSendJobSchema } from '../shared/schemas/jobs.ts'
+import {
+  QUEUE_NAMES,
+  campaignDispatchJobSchema,
+  emailSendJobSchema,
+} from '../shared/schemas/jobs.ts'
 import { processCampaignDispatch } from './processors/campaign-dispatch.ts'
 import { processEmailSend } from './processors/email-send.ts'
 import { markSendFailed, finalizeCampaignIfComplete } from './lib/sends.ts'
+import { supabase } from './lib/supabase.ts'
 import { SES_DRY_RUN } from './lib/ses.ts'
 import { DEFAULT_SES_RATE_PER_SECOND } from '../shared/sending.ts'
 import { startScheduler } from './lib/scheduler.ts'
 import { startSqsPoller } from './lib/sqs-poller.ts'
 import { startReputationGuard } from './lib/reputation-guard.ts'
+import { startDispatchRecovery } from './lib/dispatch-recovery.ts'
 
 /**
  * BullMQ worker entry point (Railway: worker service).
@@ -49,6 +55,9 @@ const dispatchQueue = new Queue(QUEUE_NAMES.campaignDispatch, {
 const scheduler = startScheduler(dispatchQueue)
 const sqsPoller = startSqsPoller()
 const reputationGuard = startReputationGuard()
+// Safety net: repairs campaigns left in `sending` because the web app could not
+// reach Redis (the Vercel → Railway hop), or because the worker died mid-send.
+const dispatchRecovery = startDispatchRecovery(dispatchQueue)
 
 for (const worker of workers) {
   worker.on('ready', () => console.log(`[worker] ${worker.name} ready`))
@@ -59,6 +68,55 @@ for (const worker of workers) {
     ),
   )
 }
+
+/**
+ * Terminal failure for a *dispatch*: a campaign whose fan-out can never run
+ * must not sit in `sending` forever (the old behaviour — there was no handler
+ * here at all, so every dispatch failure looked like "sending" indefinitely).
+ * Mark it `failed` so the UI shows the truth and the operator can retry, and
+ * remove the dead job so its deterministic id is free for that retry.
+ */
+dispatchWorker.on('failed', async (job, err) => {
+  if (!job) return
+  const maxAttempts = job.opts.attempts ?? 1
+  if (job.attemptsMade < maxAttempts) return // more retries pending
+
+  const parsed = campaignDispatchJobSchema.safeParse(job.data)
+  if (!parsed.success) return
+  const { campaignId } = parsed.data
+  try {
+    const { data: campaign } = await supabase
+      .from('campaigns')
+      .select('created_by, name')
+      .eq('id', campaignId)
+      .maybeSingle()
+
+    await supabase
+      .from('campaigns')
+      .update({ status: 'failed' })
+      .eq('id', campaignId)
+      .eq('status', 'sending')
+
+    if (campaign?.created_by) {
+      await supabase.from('notifications').insert({
+        user_id: campaign.created_by,
+        type: 'dispatch_failed',
+        severity: 'critical',
+        title: 'Campaign could not be sent',
+        body: `"${campaign.name ?? 'Untitled campaign'}" failed before any mail went out: ${err.message.slice(0, 300)}`,
+        campaign_id: campaignId,
+      })
+    }
+    console.error(
+      `[worker] campaign.dispatch for ${campaignId} failed terminally — campaign marked failed`,
+    )
+  } catch (e) {
+    console.error('[worker] failed to record dispatch failure:', e)
+  } finally {
+    // Free the deterministic job id; the failure is recorded in the database.
+    await job.remove().catch(() => {})
+  }
+})
 
 /**
  * Terminal failure for a send: once BullMQ has used up every attempt, record
@@ -89,6 +147,7 @@ async function shutdown(signal: string) {
   scheduler.stop()
   sqsPoller.stop()
   reputationGuard.stop()
+  dispatchRecovery.stop()
   await Promise.all(workers.map((w) => w.close()))
   await dispatchQueue.close()
   await connection.quit()

@@ -556,8 +556,21 @@ async function send() {
   }
   sending.value = true
   try {
-    await $fetch(`/api/campaigns/${campaignId.value}/send`, { method: 'POST' })
-    toast('success', 'Campaign is sending')
+    const res = await $fetch<{ dispatch?: 'queued' | 'deferred' }>(
+      `/api/campaigns/${campaignId.value}/send`,
+      { method: 'POST' },
+    )
+    // `deferred` = the queue was unreachable from the web app; the campaign is
+    // recorded as sending and the worker picks it up on its next sweep.
+    if (res?.dispatch === 'deferred') {
+      toast(
+        'info',
+        'Campaign queued',
+        'The job queue was unreachable, so the sender will pick this up within a minute.',
+      )
+    } else {
+      toast('success', 'Campaign is sending')
+    }
     await navigateTo(`/campaigns/${campaignId.value}`)
   } catch (err) {
     toast('error', 'Could not send', errMsg(err))

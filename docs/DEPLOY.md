@@ -112,6 +112,50 @@ Sendinal runs as three pieces:
 
 ---
 
+## 3b. Troubleshooting — campaign stuck in `sending`
+
+A campaign flips to `sending` the moment the API claims it; everything after that
+is the worker's job. If it never progresses, walk the chain in this order.
+
+1. **Is the worker consuming?** Railway → worker service → Deployments → logs.
+   A healthy boot prints `[worker] campaign.dispatch ready`, `[worker] email.send
+   ready`, `[scheduler] started`, `[sqs-poller] started`, `[reputation] started`
+   and `[recovery] started`. A dispatch logs `[campaign.dispatch] campaign <id>`.
+2. **Did the job ever reach Redis?** With the Redis public proxy URL:
+   `redis-cli -u "$REDIS_URL" keys 'bull:campaign.dispatch:*'`. No `:wait` /
+   `:active` key and no dispatch log means the job was never enqueued — the web
+   app could not reach Redis.
+3. **⚠️ Does the Redis TCP proxy still exist?** Redis service → Settings →
+   Networking → Public Networking. **Railway deletes the TCP proxy when a project
+   is suspended (e.g. a failed payment) and does _not_ recreate it on
+   reactivation.** Both services then show *Active* and the worker keeps working
+   (it uses `redis.railway.internal`, unaffected), while Vercel's `REDIS_URL`
+   points at a proxy host that no longer resolves. This was the root cause of the
+   2026-11-24 outage. Fix: recreate public networking on the Redis service, then
+   update `REDIS_URL` on Vercel to the **new** `host:port` (the port changes) and
+   redeploy. The password (`REDIS_PASSWORD` on the Redis service) is unchanged.
+4. **Is anything half-sent?** `sends` rows are inserted in one statement *before*
+   any mail is queued, so a campaign with **zero** `sends` rows has reached no
+   recipient at all and is always safe to re-send. A campaign with some
+   `status='queued'` sends is mid-flight — never re-dispatch it blind, or those
+   recipients get the mail twice.
+
+**What recovers automatically** (so this failure can't wedge a campaign again):
+
+- The web producer fails fast instead of hanging (bounded ioredis retries +
+  command timeout), and an enqueue failure no longer discards the send: the
+  campaign stays `sending` and the API returns `dispatch: "deferred"`.
+- `worker/lib/dispatch-recovery.ts` sweeps every 60s and, from inside Railway's
+  private network, re-dispatches any campaign that has been `sending` for >90s
+  with zero `sends` rows — so a dead public proxy delays a send by about a
+  minute instead of stalling it forever. It also finalizes campaigns whose sends
+  all completed, and raises an in-app alert (rather than re-sending) when sends
+  are still `queued`. Campaigns stuck for over 24h are left for a human.
+- `campaign.dispatch` retries 3× with backoff; on terminal failure the campaign
+  is marked `failed` with an in-app alert instead of sitting in `sending`.
+
+---
+
 ## 4. Bounce / complaint handling
 
 Default (no extra setup): SES → SNS → **SQS**, drained by the worker's poller
